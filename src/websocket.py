@@ -14,7 +14,7 @@ def register_websocket(sock):
     """Register WebSocket routes on the Flask-Sock instance."""
 
     @sock.route("/ws/<user_id>")
-    def websocket(user_id, ws):
+    def websocket(ws, user_id):
         add_websocket(user_id, ws)
 
         try:

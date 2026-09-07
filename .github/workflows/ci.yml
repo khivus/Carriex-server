@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m pytest -q
+      - run: python -m build
+      - name: Verify release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          python - <<'PY'
+          import os
+          from importlib.metadata import version
+          assert os.environ["GITHUB_REF_NAME"] == "v" + version("carriex-server")
+          PY
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose up --build --wait --wait-timeout 120
+      - name: Verify HTTP and WebSocket transport
+        run: |
+          python -m pip install 'websocket-client>=1.8,<2'
+          python - <<'PY'
+          import json
+          from contextlib import closing
+          import urllib.request
+          import websocket
+          with urllib.request.urlopen('http://127.0.0.1:5000/health') as response:
+              assert json.load(response)['status'] == 'alive'
+          with closing(websocket.create_connection('ws://127.0.0.1:5000/ws/ci', timeout=5)) as ws:
+              ws.send(json.dumps({'type': 'health'}))
+              assert json.loads(ws.recv()) == {'type': 'health', 'status': 'alive'}
+          PY
+      - if: always()
+        run: docker compose logs && docker compose down

@@ -17,76 +17,10 @@ Tests:
 """
 
 import json
-import time
 from datetime import datetime
 
 import pytest
-
-from src.app import app
-from src.store import message_store, websocket_connections
-
-
-# ============================================================================
-# FIXTURES
-# ============================================================================
-
-@pytest.fixture
-def client():
-    """Return a Flask test client with clean server state."""
-    app.config["TESTING"] = True
-
-    with app.test_client() as client:
-        yield client
-
-    # Make every test independent.
-    message_store.clear()
-    websocket_connections.clear()
-
-
-@pytest.fixture
-def websocket():
-    """
-    Return a helper for opening a real WebSocket connection.
-
-    Flask-Sock uses simple-websocket underneath, so the test server must be
-    running separately for WebSocket tests.
-
-    Start the server before pytest:
-
-        python server.py
-
-    Then run:
-
-        pytest test_server.py -v
-    """
-    pytest.importorskip("websocket")
-
-    import websocket as websocket_client
-
-    connections = []
-
-    def connect(user_id):
-        ws = websocket_client.create_connection(
-            f"ws://127.0.0.1:5000/ws/{user_id}",
-            timeout=2,
-        )
-        connections.append(ws)
-        return ws
-
-    yield connect
-
-    for ws in connections:
-        try:
-            ws.close()
-        except Exception:
-            pass
-
-
-def receive_json(ws, timeout=2):
-    """Receive one JSON WebSocket message."""
-    ws.settimeout(timeout)
-    return json.loads(ws.recv())
-
+from websocket import WebSocketTimeoutException
 
 # ============================================================================
 # HTTP: BASIC FUNCTIONALITY
@@ -99,7 +33,7 @@ class TestHTTPBasicFunctionality:
 
         assert response.status_code == 200
 
-        data = response.get_json()
+        data = response.json()
         assert data["status"] == "alive"
         assert data["websocket_users"] == 0
         assert data["websocket_clients"] == 0
@@ -113,7 +47,7 @@ class TestHTTPBasicFunctionality:
 
         assert response.status_code == 201
 
-        data = response.get_json()
+        data = response.json()
         assert data["status"] == "ok"
         assert data["delivered"] is False
         assert data["message_count"] == 1
@@ -122,7 +56,7 @@ class TestHTTPBasicFunctionality:
         response = client.get("/messages/charlie")
 
         assert response.status_code == 200
-        assert response.get_json()["messages"] == []
+        assert response.json()["messages"] == []
 
     def test_send_and_retrieve_message(self, client):
         response = client.post("/send", json={
@@ -137,7 +71,7 @@ class TestHTTPBasicFunctionality:
 
         assert response.status_code == 200
 
-        messages = response.get_json()["messages"]
+        messages = response.json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["from"] == "alice"
@@ -152,10 +86,10 @@ class TestHTTPBasicFunctionality:
         })
 
         response = client.get("/messages/bob")
-        assert len(response.get_json()["messages"]) == 1
+        assert len(response.json()["messages"]) == 1
 
         response = client.get("/messages/bob")
-        assert response.get_json()["messages"] == []
+        assert response.json()["messages"] == []
 
 
 # ============================================================================
@@ -201,7 +135,7 @@ class TestHTTPErrorHandling:
 
         assert response.status_code == 400
 
-        data = response.get_json()
+        data = response.json()
         assert "error" in data
         assert "missing fields" in data["error"]
 
@@ -209,12 +143,12 @@ class TestHTTPErrorHandling:
         response = client.post(
             "/send",
             data="not json",
-            content_type="application/json",
+            headers={"Content-Type": "application/json"},
         )
 
         assert response.status_code == 400
 
-        data = response.get_json()
+        data = response.json()
         assert data["error"] == "invalid JSON"
 
     def test_send_empty_body(self, client):
@@ -222,7 +156,7 @@ class TestHTTPErrorHandling:
 
         assert response.status_code == 400
 
-        data = response.get_json()
+        data = response.json()
         assert data["error"] == "invalid JSON"
 
 
@@ -239,9 +173,9 @@ class TestHTTPMessageRouting:
             "ciphertext": "msg_for_bob",
         })
 
-        assert client.get("/messages/alice").get_json()["messages"] == []
+        assert client.get("/messages/alice").json()["messages"] == []
 
-        messages = client.get("/messages/bob").get_json()["messages"]
+        messages = client.get("/messages/bob").json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["from"] == "charlie"
@@ -257,7 +191,7 @@ class TestHTTPMessageRouting:
                 "ciphertext": f"message_{i}",
             })
 
-        messages = client.get("/messages/bob").get_json()["messages"]
+        messages = client.get("/messages/bob").json()["messages"]
 
         assert len(messages) == 3
         assert messages[0]["from"] == "alice"
@@ -277,8 +211,8 @@ class TestHTTPMessageRouting:
             "ciphertext": "for_bob",
         })
 
-        alice = client.get("/messages/alice").get_json()["messages"]
-        bob = client.get("/messages/bob").get_json()["messages"]
+        alice = client.get("/messages/alice").json()["messages"]
+        bob = client.get("/messages/bob").json()["messages"]
 
         assert len(alice) == 1
         assert alice[0]["ciphertext"] == "for_alice"
@@ -304,7 +238,7 @@ class TestHTTPEdgeCases:
 
         messages = client.get(
             "/messages/user_bob.456"
-        ).get_json()["messages"]
+        ).json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["from"] == "user_alice-123"
@@ -320,7 +254,7 @@ class TestHTTPEdgeCases:
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/bob").get_json()["messages"]
+        messages = client.get("/messages/bob").json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["ciphertext"] == ciphertext
@@ -335,7 +269,7 @@ class TestHTTPEdgeCases:
         client.post("/send", json=payload)
         client.post("/send", json=payload)
 
-        messages = client.get("/messages/bob").get_json()["messages"]
+        messages = client.get("/messages/bob").json()["messages"]
 
         assert len(messages) == 2
         assert messages[0]["ciphertext"] == messages[1]["ciphertext"]
@@ -349,7 +283,7 @@ class TestHTTPEdgeCases:
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/alice").get_json()["messages"]
+        messages = client.get("/messages/alice").json()["messages"]
 
         assert len(messages) == 1
 
@@ -362,7 +296,7 @@ class TestHTTPEdgeCases:
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/bob_中文").get_json()["messages"]
+        messages = client.get("/messages/bob_中文").json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["from"] == "alice_🚀"
@@ -376,7 +310,7 @@ class TestHTTPEdgeCases:
             "ciphertext": ciphertext,
         })
 
-        messages = client.get("/messages/bob").get_json()["messages"]
+        messages = client.get("/messages/bob").json()["messages"]
 
         assert messages[0]["ciphertext"] == ciphertext
 
@@ -389,7 +323,7 @@ class TestHTTPEdgeCases:
 
         timestamp = client.get(
             "/messages/bob"
-        ).get_json()["messages"][0]["timestamp"]
+        ).json()["messages"][0]["timestamp"]
 
         parsed = datetime.fromisoformat(timestamp)
 
@@ -409,7 +343,7 @@ class TestHTTPResponseFormat:
             "ciphertext": "msg",
         })
 
-        data = response.get_json()
+        data = response.json()
 
         assert set(data) == {
             "status",
@@ -428,7 +362,7 @@ class TestHTTPResponseFormat:
             "ciphertext": "msg",
         })
 
-        data = client.get("/messages/bob").get_json()
+        data = client.get("/messages/bob").json()
 
         assert "messages" in data
         assert isinstance(data["messages"], list)
@@ -461,12 +395,12 @@ class TestHTTPMethods:
 
 class TestWebSocketConnection:
 
-    def test_websocket_connection(self, websocket):
+    def test_websocket_connection(self, websocket, receive_json):
         ws = websocket("alice")
 
         assert ws.connected
 
-    def test_websocket_health(self, websocket):
+    def test_websocket_health(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -484,13 +418,11 @@ class TestWebSocketConnection:
         self,
         client,
         websocket,
+        receive_json,
     ):
         ws = websocket("alice")
 
-        # Give the server thread a moment to register the connection.
-        time.sleep(0.05)
-
-        data = client.get("/health").get_json()
+        data = client.get("/health").json()
 
         assert data["status"] == "alive"
         assert data["websocket_users"] == 1
@@ -508,6 +440,7 @@ class TestWebSocketSend:
     def test_websocket_send_offline_recipient(
         self,
         websocket,
+        receive_json,
     ):
         ws = websocket("alice")
 
@@ -526,6 +459,7 @@ class TestWebSocketSend:
     def test_websocket_send_to_online_recipient(
         self,
         websocket,
+        receive_json,
     ):
         alice = websocket("alice")
         bob = websocket("bob")
@@ -551,6 +485,7 @@ class TestWebSocketSend:
         self,
         client,
         websocket,
+        receive_json,
     ):
         bob = websocket("bob")
 
@@ -562,7 +497,7 @@ class TestWebSocketSend:
 
         assert response.status_code == 201
 
-        data = response.get_json()
+        data = response.json()
         assert data["delivered"] is True
         assert data["message_count"] == 0
 
@@ -575,6 +510,7 @@ class TestWebSocketSend:
     def test_offline_message_is_delivered_when_user_connects(
         self,
         websocket,
+        receive_json,
     ):
         alice = websocket("alice")
 
@@ -607,6 +543,7 @@ class TestWebSocketRouting:
     def test_messages_are_routed_to_correct_user(
         self,
         websocket,
+        receive_json,
     ):
         alice = websocket("alice")
         bob = websocket("bob")
@@ -627,12 +564,13 @@ class TestWebSocketRouting:
         # Charlie must not receive Alice's message.
         charlie.settimeout(0.1)
 
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketTimeoutException):
             charlie.recv()
 
     def test_multiple_messages_preserve_order(
         self,
         websocket,
+        receive_json,
     ):
         alice = websocket("alice")
         bob = websocket("bob")
@@ -665,6 +603,7 @@ class TestWebSocketRouting:
     def test_multiple_connections_for_same_user(
         self,
         websocket,
+        receive_json,
     ):
         bob1 = websocket("bob")
         bob2 = websocket("bob")
@@ -691,7 +630,7 @@ class TestWebSocketRouting:
 
 class TestWebSocketValidation:
 
-    def test_invalid_json(self, websocket):
+    def test_invalid_json(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send("not json")
@@ -701,7 +640,7 @@ class TestWebSocketValidation:
         assert response["type"] == "error"
         assert response["error"] == "invalid JSON"
 
-    def test_unknown_message_type(self, websocket):
+    def test_unknown_message_type(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -713,7 +652,7 @@ class TestWebSocketValidation:
         assert response["type"] == "error"
         assert response["error"] == "unknown message type"
 
-    def test_send_missing_recipient(self, websocket):
+    def test_send_missing_recipient(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -726,7 +665,7 @@ class TestWebSocketValidation:
         assert response["type"] == "error"
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
-    def test_send_missing_ciphertext(self, websocket):
+    def test_send_missing_ciphertext(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -739,7 +678,7 @@ class TestWebSocketValidation:
         assert response["type"] == "error"
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
-    def test_empty_recipient(self, websocket):
+    def test_empty_recipient(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -753,7 +692,7 @@ class TestWebSocketValidation:
         assert response["type"] == "error"
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
-    def test_empty_ciphertext(self, websocket):
+    def test_empty_ciphertext(self, websocket, receive_json):
         ws = websocket("alice")
 
         ws.send(json.dumps({
@@ -778,13 +717,13 @@ class TestErrorHandlers:
         response = client.get("/does-not-exist")
 
         assert response.status_code == 404
-        assert response.get_json()["error"] == "endpoint not found"
+        assert response.json()["error"] == "endpoint not found"
 
     def test_wrong_method(self, client):
         response = client.put("/health")
 
         assert response.status_code == 405
-        assert response.get_json()["error"] == "method not allowed"
+        assert response.json()["error"] == "method not allowed"
 
 
 # ============================================================================

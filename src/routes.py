@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request
 
+from src._version import __version__
+
 from src.store import message_store, route_message, store_lock, websocket_connections
 
 
@@ -52,6 +54,7 @@ def health():
 
     return jsonify({
         "status": "alive",
+        "version": __version__,
         "websocket_users": connected_users,
         "websocket_clients": connected_clients,
     }), 200

@@ -1,0 +1,3 @@
+include README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md
+include main.py requirements.txt Dockerfile compose.yaml .dockerignore .env.example
+recursive-include tests *.py *.md
