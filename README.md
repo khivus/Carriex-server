@@ -28,8 +28,10 @@ docker compose logs -f server
 docker compose down
 ```
 
-The default address is `http://127.0.0.1:5000`. Optionally copy `.env.example`
-to `.env` to change the published host or port. Compose reads this file
+By default, Compose publishes port 5000 on all IPv4 interfaces (`0.0.0.0`).
+Connect locally at `http://127.0.0.1:5000` or from another device using
+`http://<server-LAN-IP>:5000`. Optionally copy `.env.example` to `.env` to
+change the published host or port; set `HOST=127.0.0.1` for local-only access. Compose reads this file
 automatically. The image runs as a non-root user and checks `/health`.
 
 Without Compose:
