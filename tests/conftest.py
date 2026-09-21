@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import pytest
 import websocket as websocket_client
+from auth_client import authenticate, user_id
 
 
 class HTTPResponse:
@@ -51,55 +52,111 @@ class HTTPClient:
 
 
 @pytest.fixture
-def server_port(tmp_path):
+def server_factory(tmp_path):
     """Start Flask in a subprocess; never import application state into pytest."""
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-    log_path = tmp_path / "server.log"
-    with log_path.open("w", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            [sys.executable, "-m", "flask", "--app", "src.app:app",
-             "run", "--host", "127.0.0.1", "--port", str(port),
-             "--no-debugger", "--no-reload", "--with-threads"],
-            cwd=Path(__file__).resolve().parents[1],
-            stdout=log, stderr=subprocess.STDOUT,
-        )
-        try:
+    servers = []
+
+    class RunningServer:
+        def __init__(self, config):
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                self.port = sock.getsockname()[1]
+            self.config = {"ALLOW_INSECURE_HTTP": True, **config}
+            self.process = None
+            self.log_path = tmp_path / f"server-{self.port}.log"
+            self.log = self.log_path.open("w", encoding="utf-8")
+
+        def start(self):
+            self.process = subprocess.Popen(
+                [sys.executable, "-c",
+                 "import json,sys; from src.app import create_app; "
+                 "create_app(json.loads(sys.argv[1])).run(host='127.0.0.1', "
+                 "port=int(sys.argv[2]), threaded=True, use_reloader=False)",
+                 json_module.dumps(self.config), str(self.port)],
+                cwd=Path(__file__).resolve().parents[1], stdout=self.log, stderr=subprocess.STDOUT,
+            )
             deadline = time.monotonic() + 15
-            while time.monotonic() < deadline and process.poll() is None:
+            while time.monotonic() < deadline and self.process.poll() is None:
                 try:
-                    response = HTTPClient(port).get("/health")
+                    response = HTTPClient(self.port).get("/health")
                     if response.status_code == 200 and response.json()["status"] == "alive":
                         break
                 except (OSError, http.client.HTTPException):
                     pass
                 time.sleep(0.05)
             else:
-                pytest.fail("Local server failed to start:\n" + log_path.read_text(encoding="utf-8"))
-            yield port
-        finally:
-            process.terminate()
+                pytest.fail("Local server failed to start:\n" + self.log_path.read_text(encoding="utf-8"))
+
+        def stop(self):
+            if self.process is None:
+                return
+            self.process.terminate()
             try:
-                process.wait(timeout=5)
+                self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+                self.process.kill()
+                self.process.wait(timeout=5)
+
+    def launch(**config):
+        server = RunningServer(config)
+        servers.append(server)
+        server.start()
+        return server
+
+    yield launch
+    for server in servers:
+        server.stop()
+        server.log.close()
 
 
 @pytest.fixture
-def client(server_port):
+def server_port(server_factory):
+    return server_factory().port
+
+
+@pytest.fixture
+def raw_client(server_port):
     return HTTPClient(server_port)
 
 
 @pytest.fixture
-def websocket(server_port):
+def sessions(raw_client):
+    tokens = {}
+
+    def token(identity):
+        if identity not in tokens:
+            tokens[identity] = authenticate(raw_client, identity)
+        return tokens[identity]
+
+    return token
+
+
+@pytest.fixture
+def client(server_port, sessions):
+    class AuthenticatedClient(HTTPClient):
+        def request(self, method, path, *, json=None, data=None, headers=None):
+            headers = dict(headers or {})
+            if path == "/send" or path.startswith("/messages/"):
+                identity = user_id("alice")
+                if path.startswith("/messages/"):
+                    identity = path.removeprefix("/messages/")
+                elif isinstance(json, dict) and json.get("sender"):
+                    identity = json["sender"]
+                headers.setdefault("Authorization", "Bearer " + sessions(identity))
+            return super().request(method, path, json=json, data=data, headers=headers)
+
+    return AuthenticatedClient(server_port)
+
+
+@pytest.fixture
+def websocket(server_port, sessions):
     connections = []
 
     def connect(user_id):
         ws = websocket_client.create_connection(
             f"ws://127.0.0.1:{server_port}/ws/{quote(user_id, safe='')}",
             timeout=2, http_no_proxy=["127.0.0.1"],
+            header={"Authorization": "Bearer " + sessions(user_id)},
         )
         connections.append(ws)
         # Wait for registration without consuming queued messages from the socket.

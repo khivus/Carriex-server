@@ -1,14 +1,3 @@
-services:
-  server:
-    build: .
-    ports:
-      - "${HOST:-0.0.0.0}:${PORT:-5000}:5000"
-    restart: unless-stopped
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+# Default Docker setup. Reads the same .env as start-server.bat and start-server.sh.
+include:
+  - compose.paired.yaml

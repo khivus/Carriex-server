@@ -1,0 +1,31 @@
+# Standalone direct-TLS deployment; does not use the reverse-proxy compose file.
+services:
+  server:
+    build: .
+    command: ["python", "-m", "src.pairing", "--data-dir", "/var/lib/carriex", "--port", "8443"]
+    environment:
+      CARRIEX_HOST: "${CARRIEX_HOST:-}"
+      CARRIEX_PORT: "${CARRIEX_PORT:-8443}"
+      CARRIEX_PUBLIC_URL: "${CARRIEX_PUBLIC_URL:-}"
+      CARRIEX_SERVER_NAME: "${CARRIEX_SERVER_NAME:-Carriex server}"
+    ports:
+      - "${PAIRED_BIND:-0.0.0.0}:${CARRIEX_PORT:-8443}:8443"
+    volumes:
+      - server-identity:/var/lib/carriex
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      # Trust the stored certificate. Hostname check is omitted ONLY for this
+      # internal loopback health probe; clients always check their paired name/IP.
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; c=ssl.create_default_context(cafile='/var/lib/carriex/server-cert.pem'); c.check_hostname=False; urllib.request.urlopen('https://127.0.0.1:8443/health',context=c,timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+volumes:
+  server-identity:

@@ -1,3 +1,4 @@
+from auth_client import user_id
 """
 Pytest test suite for the Carriex Flask/WebSocket message server.
 
@@ -40,8 +41,8 @@ class TestHTTPBasicFunctionality:
 
     def test_send_message_success(self, client):
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "encrypted_data_abc123",
         })
 
@@ -53,42 +54,42 @@ class TestHTTPBasicFunctionality:
         assert data["message_count"] == 1
 
     def test_get_messages_empty(self, client):
-        response = client.get("/messages/charlie")
+        response = client.get("/messages/" + user_id("charlie"))
 
         assert response.status_code == 200
         assert response.json()["messages"] == []
 
     def test_send_and_retrieve_message(self, client):
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "encrypted_message_content",
         })
 
         assert response.status_code == 201
 
-        response = client.get("/messages/bob")
+        response = client.get("/messages/" + user_id("bob"))
 
         assert response.status_code == 200
 
         messages = response.json()["messages"]
 
         assert len(messages) == 1
-        assert messages[0]["from"] == "alice"
+        assert messages[0]["from"] == user_id("alice")
         assert messages[0]["ciphertext"] == "encrypted_message_content"
         assert "timestamp" in messages[0]
 
     def test_get_messages_clears_after_fetch(self, client):
         client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "msg1",
         })
 
-        response = client.get("/messages/bob")
+        response = client.get("/messages/" + user_id("bob"))
         assert len(response.json()["messages"]) == 1
 
-        response = client.get("/messages/bob")
+        response = client.get("/messages/" + user_id("bob"))
         assert response.json()["messages"] == []
 
 
@@ -102,30 +103,30 @@ class TestHTTPErrorHandling:
         "payload",
         [
             {
-                "recipient": "bob",
+                "recipient": user_id("bob"),
                 "ciphertext": "encrypted_data",
             },
             {
-                "sender": "alice",
+                "sender": user_id("alice"),
                 "ciphertext": "encrypted_data",
             },
             {
-                "sender": "alice",
-                "recipient": "bob",
+                "sender": user_id("alice"),
+                "recipient": user_id("bob"),
             },
             {
                 "sender": "",
-                "recipient": "bob",
+                "recipient": user_id("bob"),
                 "ciphertext": "encrypted_data",
             },
             {
-                "sender": "alice",
+                "sender": user_id("alice"),
                 "recipient": "",
                 "ciphertext": "encrypted_data",
             },
             {
-                "sender": "alice",
-                "recipient": "bob",
+                "sender": user_id("alice"),
+                "recipient": user_id("bob"),
                 "ciphertext": "",
             },
         ],
@@ -168,51 +169,51 @@ class TestHTTPMessageRouting:
 
     def test_message_routes_to_correct_recipient(self, client):
         client.post("/send", json={
-            "sender": "charlie",
-            "recipient": "bob",
+            "sender": user_id("charlie"),
+            "recipient": user_id("bob"),
             "ciphertext": "msg_for_bob",
         })
 
-        assert client.get("/messages/alice").json()["messages"] == []
+        assert client.get("/messages/" + user_id("alice")).json()["messages"] == []
 
-        messages = client.get("/messages/bob").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert len(messages) == 1
-        assert messages[0]["from"] == "charlie"
+        assert messages[0]["from"] == user_id("charlie")
 
     def test_multiple_messages_to_same_recipient(self, client):
         for i, sender in enumerate(
-            ["alice", "charlie", "diana"],
+            [user_id("alice"), user_id("charlie"), user_id("diana")],
             start=1,
         ):
             client.post("/send", json={
                 "sender": sender,
-                "recipient": "bob",
+                "recipient": user_id("bob"),
                 "ciphertext": f"message_{i}",
             })
 
-        messages = client.get("/messages/bob").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert len(messages) == 3
-        assert messages[0]["from"] == "alice"
-        assert messages[1]["from"] == "charlie"
-        assert messages[2]["from"] == "diana"
+        assert messages[0]["from"] == user_id("alice")
+        assert messages[1]["from"] == user_id("charlie")
+        assert messages[2]["from"] == user_id("diana")
 
     def test_multiple_recipients_are_isolated(self, client):
         client.post("/send", json={
-            "sender": "charlie",
-            "recipient": "alice",
+            "sender": user_id("charlie"),
+            "recipient": user_id("alice"),
             "ciphertext": "for_alice",
         })
 
         client.post("/send", json={
-            "sender": "charlie",
-            "recipient": "bob",
+            "sender": user_id("charlie"),
+            "recipient": user_id("bob"),
             "ciphertext": "for_bob",
         })
 
-        alice = client.get("/messages/alice").json()["messages"]
-        bob = client.get("/messages/bob").json()["messages"]
+        alice = client.get("/messages/" + user_id("alice")).json()["messages"]
+        bob = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert len(alice) == 1
         assert alice[0]["ciphertext"] == "for_alice"
@@ -227,102 +228,102 @@ class TestHTTPMessageRouting:
 
 class TestHTTPEdgeCases:
 
-    def test_special_characters_in_username(self, client):
+    def test_distinct_device_ids(self, client):
         response = client.post("/send", json={
-            "sender": "user_alice-123",
-            "recipient": "user_bob.456",
+            "sender": user_id("user_alice-123"),
+            "recipient": user_id("user_bob.456"),
             "ciphertext": "msg",
         })
 
         assert response.status_code == 201
 
         messages = client.get(
-            "/messages/user_bob.456"
+            "/messages/" + user_id("user_bob.456")
         ).json()["messages"]
 
         assert len(messages) == 1
-        assert messages[0]["from"] == "user_alice-123"
+        assert messages[0]["from"] == user_id("user_alice-123")
 
     def test_very_long_ciphertext(self, client):
         ciphertext = "x" * 10000
 
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": ciphertext,
         })
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/bob").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert len(messages) == 1
         assert messages[0]["ciphertext"] == ciphertext
 
     def test_duplicate_messages_are_stored(self, client):
         payload = {
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "duplicate_content",
         }
 
         client.post("/send", json=payload)
         client.post("/send", json=payload)
 
-        messages = client.get("/messages/bob").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert len(messages) == 2
         assert messages[0]["ciphertext"] == messages[1]["ciphertext"]
 
     def test_sender_and_recipient_same(self, client):
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "alice",
+            "sender": user_id("alice"),
+            "recipient": user_id("alice"),
             "ciphertext": "note_to_self",
         })
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/alice").json()["messages"]
+        messages = client.get("/messages/" + user_id("alice")).json()["messages"]
 
         assert len(messages) == 1
 
-    def test_unicode_usernames(self, client):
+    def test_ids_for_independently_generated_keys(self, client):
         response = client.post("/send", json={
-            "sender": "alice_🚀",
-            "recipient": "bob_中文",
+            "sender": user_id("alice_🚀"),
+            "recipient": user_id("bob_中文"),
             "ciphertext": "msg",
         })
 
         assert response.status_code == 201
 
-        messages = client.get("/messages/bob_中文").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob_中文")).json()["messages"]
 
         assert len(messages) == 1
-        assert messages[0]["from"] == "alice_🚀"
+        assert messages[0]["from"] == user_id("alice_🚀")
 
     def test_ciphertext_not_modified(self, client):
         ciphertext = 'abc123!@#$%^&*()_+-=[]{}|;:,.<>?/~`'
 
         client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": ciphertext,
         })
 
-        messages = client.get("/messages/bob").json()["messages"]
+        messages = client.get("/messages/" + user_id("bob")).json()["messages"]
 
         assert messages[0]["ciphertext"] == ciphertext
 
     def test_timestamp_is_valid_iso_format(self, client):
         client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "msg",
         })
 
         timestamp = client.get(
-            "/messages/bob"
+            "/messages/" + user_id("bob")
         ).json()["messages"][0]["timestamp"]
 
         parsed = datetime.fromisoformat(timestamp)
@@ -338,8 +339,8 @@ class TestHTTPResponseFormat:
 
     def test_send_response_structure(self, client):
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "msg",
         })
 
@@ -357,12 +358,12 @@ class TestHTTPResponseFormat:
 
     def test_get_messages_response_structure(self, client):
         client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "msg",
         })
 
-        data = client.get("/messages/bob").json()
+        data = client.get("/messages/" + user_id("bob")).json()
 
         assert "messages" in data
         assert isinstance(data["messages"], list)
@@ -386,7 +387,7 @@ class TestHTTPMethods:
         assert client.get("/send").status_code == 405
 
     def test_post_messages_not_allowed(self, client):
-        assert client.post("/messages/bob").status_code == 405
+        assert client.post("/messages/" + user_id("bob")).status_code == 405
 
 
 # ============================================================================
@@ -396,12 +397,12 @@ class TestHTTPMethods:
 class TestWebSocketConnection:
 
     def test_websocket_connection(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         assert ws.connected
 
     def test_websocket_health(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "health",
@@ -420,7 +421,7 @@ class TestWebSocketConnection:
         websocket,
         receive_json,
     ):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         data = client.get("/health").json()
 
@@ -442,11 +443,11 @@ class TestWebSocketSend:
         websocket,
         receive_json,
     ):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "encrypted_message",
         }))
 
@@ -461,12 +462,12 @@ class TestWebSocketSend:
         websocket,
         receive_json,
     ):
-        alice = websocket("alice")
-        bob = websocket("bob")
+        alice = websocket(user_id("alice"))
+        bob = websocket(user_id("bob"))
 
         alice.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "encrypted_message",
         }))
 
@@ -477,7 +478,7 @@ class TestWebSocketSend:
         assert sent["delivered"] is True
 
         assert received["type"] == "message"
-        assert received["message"]["from"] == "alice"
+        assert received["message"]["from"] == user_id("alice")
         assert received["message"]["ciphertext"] == "encrypted_message"
         assert "timestamp" in received["message"]
 
@@ -487,11 +488,11 @@ class TestWebSocketSend:
         websocket,
         receive_json,
     ):
-        bob = websocket("bob")
+        bob = websocket(user_id("bob"))
 
         response = client.post("/send", json={
-            "sender": "alice",
-            "recipient": "bob",
+            "sender": user_id("alice"),
+            "recipient": user_id("bob"),
             "ciphertext": "encrypted_from_http",
         })
 
@@ -504,7 +505,7 @@ class TestWebSocketSend:
         received = receive_json(bob)
 
         assert received["type"] == "message"
-        assert received["message"]["from"] == "alice"
+        assert received["message"]["from"] == user_id("alice")
         assert received["message"]["ciphertext"] == "encrypted_from_http"
 
     def test_offline_message_is_delivered_when_user_connects(
@@ -512,11 +513,11 @@ class TestWebSocketSend:
         websocket,
         receive_json,
     ):
-        alice = websocket("alice")
+        alice = websocket(user_id("alice"))
 
         alice.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "offline_message",
         }))
 
@@ -525,12 +526,12 @@ class TestWebSocketSend:
         assert sent["delivered"] is False
         assert sent["message_count"] == 1
 
-        bob = websocket("bob")
+        bob = websocket(user_id("bob"))
 
         received = receive_json(bob)
 
         assert received["type"] == "message"
-        assert received["message"]["from"] == "alice"
+        assert received["message"]["from"] == user_id("alice")
         assert received["message"]["ciphertext"] == "offline_message"
 
 
@@ -545,13 +546,13 @@ class TestWebSocketRouting:
         websocket,
         receive_json,
     ):
-        alice = websocket("alice")
-        bob = websocket("bob")
-        charlie = websocket("charlie")
+        alice = websocket(user_id("alice"))
+        bob = websocket(user_id("bob"))
+        charlie = websocket(user_id("charlie"))
 
         alice.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "for_bob",
         }))
 
@@ -572,13 +573,13 @@ class TestWebSocketRouting:
         websocket,
         receive_json,
     ):
-        alice = websocket("alice")
-        bob = websocket("bob")
+        alice = websocket(user_id("alice"))
+        bob = websocket(user_id("bob"))
 
         for i in range(3):
             alice.send(json.dumps({
                 "type": "send",
-                "recipient": "bob",
+                "recipient": user_id("bob"),
                 "ciphertext": f"message_{i}",
             }))
 
@@ -605,13 +606,13 @@ class TestWebSocketRouting:
         websocket,
         receive_json,
     ):
-        bob1 = websocket("bob")
-        bob2 = websocket("bob")
-        alice = websocket("alice")
+        bob1 = websocket(user_id("bob"))
+        bob2 = websocket(user_id("bob"))
+        alice = websocket(user_id("alice"))
 
         alice.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "message",
         }))
 
@@ -631,7 +632,7 @@ class TestWebSocketRouting:
 class TestWebSocketValidation:
 
     def test_invalid_json(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send("not json")
 
@@ -641,7 +642,7 @@ class TestWebSocketValidation:
         assert response["error"] == "invalid JSON"
 
     def test_unknown_message_type(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "unknown",
@@ -653,7 +654,7 @@ class TestWebSocketValidation:
         assert response["error"] == "unknown message type"
 
     def test_send_missing_recipient(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "send",
@@ -666,11 +667,11 @@ class TestWebSocketValidation:
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
     def test_send_missing_ciphertext(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
         }))
 
         response = receive_json(ws)
@@ -679,7 +680,7 @@ class TestWebSocketValidation:
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
     def test_empty_recipient(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "send",
@@ -693,11 +694,11 @@ class TestWebSocketValidation:
         assert response["error"] == "missing fields (recipient, ciphertext)"
 
     def test_empty_ciphertext(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
 
         ws.send(json.dumps({
             "type": "send",
-            "recipient": "bob",
+            "recipient": user_id("bob"),
             "ciphertext": "",
         }))
 

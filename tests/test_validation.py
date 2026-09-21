@@ -1,14 +1,15 @@
+from auth_client import user_id
 import pytest
 import json
 
 class TestHTTPErrorHandling:
     @pytest.mark.parametrize("payload", [
-        {"recipient": "bob", "ciphertext": "encrypted_data"},
-        {"sender": "alice", "ciphertext": "encrypted_data"},
-        {"sender": "alice", "recipient": "bob"},
-        {"sender": "", "recipient": "bob", "ciphertext": "encrypted_data"},
-        {"sender": "alice", "recipient": "", "ciphertext": "encrypted_data"},
-        {"sender": "alice", "recipient": "bob", "ciphertext": ""},
+        {"recipient": user_id("bob"), "ciphertext": "encrypted_data"},
+        {"sender": user_id("alice"), "ciphertext": "encrypted_data"},
+        {"sender": user_id("alice"), "recipient": user_id("bob")},
+        {"sender": "", "recipient": user_id("bob"), "ciphertext": "encrypted_data"},
+        {"sender": user_id("alice"), "recipient": "", "ciphertext": "encrypted_data"},
+        {"sender": user_id("alice"), "recipient": user_id("bob"), "ciphertext": ""},
     ])
     def test_send_invalid_payload(self, client, payload):
         response = client.post("/send", json=payload)
@@ -31,7 +32,7 @@ class TestHTTPMethods:
         assert client.get("/send").status_code == 405
 
     def test_post_messages_not_allowed(self, client):
-        assert client.post("/messages/bob").status_code == 405
+        assert client.post("/messages/" + user_id("bob")).status_code == 405
 
 
 class TestErrorHandlers:
@@ -48,27 +49,27 @@ class TestErrorHandlers:
 
 class TestWebSocketValidation:
     def test_invalid_json(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
         ws.send("not json")
         response = receive_json(ws)
         assert response["type"] == "error"
         assert response["error"] == "invalid JSON"
 
     def test_unknown_message_type(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
         ws.send(json.dumps({"type": "unknown"}))
         response = receive_json(ws)
         assert response["type"] == "error"
         assert response["error"] == "unknown message type"
 
     def test_send_missing_recipient(self, websocket, receive_json):
-        ws = websocket("alice")
+        ws = websocket(user_id("alice"))
         ws.send(json.dumps({"type": "send", "ciphertext": "encrypted"}))
         response = receive_json(ws)
         assert response["type"] == "error"
 
     def test_send_missing_ciphertext(self, websocket, receive_json):
-        ws = websocket("alice")
-        ws.send(json.dumps({"type": "send", "recipient": "bob"}))
+        ws = websocket(user_id("alice"))
+        ws.send(json.dumps({"type": "send", "recipient": user_id("bob")}))
         response = receive_json(ws)
         assert response["type"] == "error"

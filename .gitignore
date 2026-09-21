@@ -20,3 +20,10 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+carriex-local-ca.crt
+.carriex-server/
+server-key.pem
+pairing.html
+pairing.png
+pairing.json

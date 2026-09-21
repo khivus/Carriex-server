@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "HTTP and WebSocket relay for opaque encrypted messages"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["Flask>=3.1,<4", "flask-sock>=0.7,<1"]
+dependencies = ["Flask>=3.1,<4", "flask-sock>=0.7,<1", "cryptography>=46,<51", "qrcode[pil]>=8.2,<9", "python-dotenv>=1.1,<2"]
 
 [project.optional-dependencies]
 server = ["gunicorn>=23,<24; sys_platform != 'win32'"]

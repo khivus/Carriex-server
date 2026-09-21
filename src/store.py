@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 from threading import Lock
 
@@ -60,6 +61,8 @@ def send_to_connected_user(recipient, message):
 
     for ws in connections:
         try:
+            if time.monotonic() >= ws.auth_expires_at:
+                raise TimeoutError("Session expired")
             ws.send(json.dumps({"type": "message", "message": message}))
             delivered = True
         except Exception:

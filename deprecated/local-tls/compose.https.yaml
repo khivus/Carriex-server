@@ -1,0 +1,30 @@
+# Standalone HTTPS deployment: docker compose -f compose.https.yaml up --build -d
+services:
+  server:
+    build: .
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SERVER_ADDRESS: ${SERVER_ADDRESS:?Set SERVER_ADDRESS to your LAN IP or hostname in .env}
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      server:
+        condition: service_healthy
+volumes:
+  caddy_data:
+  caddy_config:

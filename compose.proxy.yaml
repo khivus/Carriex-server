@@ -1,0 +1,16 @@
+# Advanced legacy HTTP backend. Use only behind a trusted TLS reverse proxy.
+services:
+  server:
+    build: .
+    ports:
+      - "${HOST:-127.0.0.1}:${PORT:-5000}:5000"
+    environment:
+      CARRIEX_ALLOW_INSECURE_HTTP: "${CARRIEX_ALLOW_INSECURE_HTTP:-0}"
+      CARRIEX_TRUST_PROXY: "${CARRIEX_TRUST_PROXY:-0}"
+      CARRIEX_AUTH_ORIGIN: "${CARRIEX_AUTH_ORIGIN:-}"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]

@@ -1,0 +1,8 @@
+{
+    auto_https disable_redirects
+}
+
+https://{$SERVER_ADDRESS} {
+    tls internal
+    reverse_proxy server:5000
+}

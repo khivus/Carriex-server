@@ -1,4 +1,6 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
+
+from src.auth import valid_user_id
 
 from src._version import __version__
 
@@ -13,7 +15,7 @@ def send_message():
     """POST /send"""
     data = request.get_json(silent=True)
 
-    if not data:
+    if not isinstance(data, dict) or not data:
         return jsonify({"error": "invalid JSON"}), 400
 
     sender = data.get("sender")
@@ -25,7 +27,12 @@ def send_message():
             "error": "missing fields (sender, recipient, ciphertext)"
         }), 400
 
-    _, delivered, queued_count = route_message(sender, recipient, ciphertext)
+    if sender != g.user_id:
+        return jsonify(error="Sender does not match authenticated device"), 403
+    if not valid_user_id(recipient) or not isinstance(ciphertext, str):
+        return jsonify(error="Invalid recipient or ciphertext"), 400
+
+    _, delivered, queued_count = route_message(g.user_id, recipient, ciphertext)
 
     return jsonify({
         "status": "ok",
