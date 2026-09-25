@@ -58,6 +58,52 @@ def test_config_changes_update_pairing_without_replacing_private_key(tmp_path):
     assert hashlib.sha256((directory / "server-key.pem").read_bytes()).digest() == private
 
 
+def test_public_pairing_files_are_copied_to_configured_existing_directory(tmp_path):
+    destination = tmp_path / "phone-pairing"
+    destination.mkdir()
+    config = f"CARRIEX_HOST=localhost\nCARRIEX_PAIRING_EXPORT_DIR={destination}\n"
+    run(tmp_path, config, "--pair-only")
+    identity = tmp_path / "identity"
+    for filename in ("pairing.html", "pairing.png", "pairing.json"):
+        assert (destination / filename).read_bytes() == (identity / filename).read_bytes()
+    assert not (destination / "server-key.pem").exists()
+    first = (destination / "pairing.json").read_bytes()
+    run(tmp_path, config.replace("localhost", "127.0.0.1"), "--pair-only")
+    assert (destination / "pairing.json").read_bytes() != first
+    assert (destination / "pairing.json").read_bytes() == (identity / "pairing.json").read_bytes()
+
+
+def test_missing_pairing_export_directory_is_created_on_startup_only(tmp_path):
+    destination = tmp_path / "new" / "pairing"
+    config = f"CARRIEX_HOST=localhost\nCARRIEX_PAIRING_EXPORT_DIR={destination}\n"
+    result = run(tmp_path, config, "--check-config")
+    assert "will be created on startup" in result.stdout
+    assert not destination.exists()
+    assert not (tmp_path / "identity").exists()
+    run(tmp_path, config, "--pair-only")
+    assert (destination / "pairing.html").is_file()
+    assert (destination / "pairing.png").is_file()
+    assert (destination / "pairing.json").is_file()
+
+
+def test_pairing_export_path_must_be_a_directory(tmp_path):
+    destination = tmp_path / "pairing.txt"
+    destination.write_text("keep")
+    result = run(tmp_path, f"CARRIEX_HOST=localhost\nCARRIEX_PAIRING_EXPORT_DIR={destination}\n",
+                 "--pair-only", success=False)
+    assert "is not a directory" in result.stderr
+    assert destination.read_text() == "keep"
+    assert not (tmp_path / "identity").exists()
+
+
+def test_pairing_export_cannot_be_inside_private_identity_directory(tmp_path):
+    destination = tmp_path / "identity" / "public"
+    result = run(tmp_path, f"CARRIEX_HOST=localhost\nCARRIEX_PAIRING_EXPORT_DIR={destination}\n",
+                 "--check-config", success=False)
+    assert "outside the private identity directory" in result.stderr
+    assert not (tmp_path / "identity" / "server-key.pem").exists()
+
+
 @pytest.mark.parametrize("text", [
     "CARRIEX_HOST=localhost\nCARRIEX_PORT=nope", "CARRIEX_HOST=localhost\nCARRIEX_PORT=0",
     "CARRIEX_HOST=localhost\nCARRIEX_PORT=65536", "CARRIEX_HOST=https://localhost",

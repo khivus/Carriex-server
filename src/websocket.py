@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 from flask import g
@@ -6,11 +7,11 @@ from flask import g
 from src.auth import valid_user_id
 
 from src.store import (
+    acknowledge_messages,
     add_websocket,
-    message_store,
     remove_websocket,
     route_message,
-    store_lock,
+    store,
 )
 
 
@@ -25,10 +26,9 @@ def register_websocket(sock):
         add_websocket(user_id, ws)
 
         try:
-            with store_lock:
-                queued_messages = message_store.pop(user_id, [])
+            queued_messages = store().inbox(user_id)
 
-            for index, message in enumerate(queued_messages):
+            for message in queued_messages:
                 try:
                     if time.monotonic() >= ws.auth_expires_at:
                         raise TimeoutError("Session expired")
@@ -37,9 +37,7 @@ def register_websocket(sock):
                         "message": message,
                     }))
                 except Exception:
-                    # Restore the failed message and every remaining unsent item.
-                    with store_lock:
-                        message_store[user_id] = queued_messages[index:] + message_store.get(user_id, [])
+                    # Messages remain queued until the recipient acknowledges them.
                     return
 
             while True:
@@ -88,9 +86,24 @@ def register_websocket(sock):
                     }))
                     continue
 
+                if message_type == "ack":
+                    ids = data.get("ids")
+                    if not isinstance(ids, list) or len(ids) > 500 or any(
+                        not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{32}", value) is None for value in ids
+                    ):
+                        ws.send(json.dumps({"type": "error", "error": "Invalid message IDs"}))
+                        continue
+                    report_delivery = data.get("report_delivery", True)
+                    if not isinstance(report_delivery, bool):
+                        ws.send(json.dumps({"type": "error", "error": "Invalid report_delivery"}))
+                        continue
+                    ws.send(json.dumps({"type": "acknowledged", "count": acknowledge_messages(user_id, ids, report_delivery)}))
+                    continue
+
                 if message_type == "send":
                     recipient = data.get("recipient")
                     ciphertext = data.get("ciphertext")
+                    message_id = data.get("id")
 
                     if not recipient or not ciphertext:
                         ws.send(json.dumps({
@@ -106,16 +119,21 @@ def register_websocket(sock):
                         ws.send(json.dumps({"type": "error", "error": "Invalid recipient or ciphertext"}))
                         continue
 
-                    _, delivered, queued_count = route_message(
-                        user_id,
-                        recipient,
-                        ciphertext,
-                    )
+                    if message_id is not None and (not isinstance(message_id, str) or re.fullmatch(r"[0-9a-f]{32}", message_id) is None):
+                        ws.send(json.dumps({"type": "error", "error": "Invalid message ID"}))
+                        continue
+
+                    try:
+                        message, delivered, queued_count = route_message(user_id, recipient, ciphertext, message_id)
+                    except (ValueError, OverflowError) as exc:
+                        ws.send(json.dumps({"type": "error", "error": str(exc)}))
+                        continue
 
                     ws.send(json.dumps({
                         "type": "sent",
                         "delivered": delivered,
                         "message_count": queued_count,
+                        "id": message["id"],
                     }))
                     continue
 

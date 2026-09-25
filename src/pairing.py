@@ -8,6 +8,7 @@ import base64
 import csv
 import hashlib
 import html
+import io
 import ipaddress
 import json
 import os
@@ -83,10 +84,10 @@ def private_directory(directory):
         directory.chmod(0o700)
 
 
-def atomic_write(path, value):
+def atomic_write(path, value, mode=0o600):
     temporary = path.with_name(path.name + "." + secrets.token_hex(8) + ".tmp")
     try:
-        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
         with os.fdopen(fd, "wb") as stream:
             stream.write(value)
         os.replace(temporary, path)
@@ -94,7 +95,22 @@ def atomic_write(path, value):
         temporary.unlink(missing_ok=True)
 
 
-def prepare_pairing(directory, address, name="Carriex server"):
+def pairing_export_directory(value, identity_directory, create=False):
+    if value is None:
+        return None
+    if not value.strip():
+        raise ValueError("CARRIEX_PAIRING_EXPORT_DIR must name a directory")
+    destination = Path(value).expanduser().resolve()
+    if destination == identity_directory or identity_directory in destination.parents:
+        raise ValueError("Pairing export directory must be outside the private identity directory")
+    if destination.exists() and not destination.is_dir():
+        raise ValueError(f"Pairing export path is not a directory: {destination}")
+    if create:
+        destination.mkdir(parents=True, exist_ok=True)
+    return destination
+
+
+def prepare_pairing(directory, address, name="Carriex server", export_directory=None):
     directory = Path(directory).resolve()
     address = canonical_address(address)
     if not isinstance(name, str) or not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
@@ -152,12 +168,16 @@ def prepare_pairing(directory, address, name="Carriex server"):
     bundle = {"type": "carriex-server", "version": 1, "name": name, "url": address,
               "certificate": base64.b64encode(certificate.public_bytes(serialization.Encoding.DER)).decode("ascii")}
     text = json.dumps(bundle, ensure_ascii=True, separators=(",", ":"))
-    atomic_write(directory / "pairing.json", text.encode("utf-8"))
+    pairing_json = text.encode("utf-8")
+    atomic_write(directory / "pairing.json", pairing_json)
     atomic_write(directory / "settings.json", json.dumps({"address": address, "name": name}).encode("utf-8"))
     code = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=4)
     code.add_data(text)
     code.make(fit=True)
-    code.make_image(fill_color="black", back_color="white").save(directory / "pairing.png")
+    image = io.BytesIO()
+    code.make_image(fill_color="black", back_color="white").save(image, format="PNG")
+    pairing_png = image.getvalue()
+    atomic_write(directory / "pairing.png", pairing_png)
     page = f'''<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Pair {html.escape(name)}</title>
 <style>body{{font:17px system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#f5f7fb;color:#162238}}
@@ -171,7 +191,12 @@ code{{overflow-wrap:anywhere}}button{{padding:12px;margin:12px 0}}</style>
 <button onclick="document.getElementById('pairing').select()">Select pairing text</button>
 <p>This bundle contains only the public certificate. Share it through a trusted channel.
 Keep <code>server-key.pem</code> private and backed up. The address must be reachable from the phone.</p></html>'''
-    atomic_write(directory / "pairing.html", page.encode("utf-8"))
+    pairing_html = page.encode("utf-8")
+    atomic_write(directory / "pairing.html", pairing_html)
+    if export_directory is not None:
+        for filename, contents in (("pairing.json", pairing_json), ("pairing.png", pairing_png),
+                                   ("pairing.html", pairing_html)):
+            atomic_write(export_directory / filename, contents, mode=0o644)
     return bundle, fingerprint
 
 
@@ -181,6 +206,7 @@ def main(argv=None):
     parser.add_argument("--address", help="HTTPS URL phones will use; its port is also listened on unless --port is supplied")
     parser.add_argument("--name")
     parser.add_argument("--data-dir")
+    parser.add_argument("--pairing-export-dir", help="Existing folder for an additional copy of public pairing files")
     parser.add_argument("--bind", help="Listening interface, not the pairing address")
     parser.add_argument("--port", type=int, help="Override listening port for router/container port mapping")
     parser.add_argument("--check-config", action="store_true", help="Validate and display settings without changing keys or starting")
@@ -190,6 +216,9 @@ def main(argv=None):
     try:
         config = read_config(args.config)
         directory = Path(args.data_dir or config.get("CARRIEX_IDENTITY_DIR") or ".carriex-server").resolve()
+        export_directory = pairing_export_directory(
+            args.pairing_export_dir if args.pairing_export_dir is not None else config.get("CARRIEX_PAIRING_EXPORT_DIR"),
+            directory)
         settings = json.loads((directory / "settings.json").read_text("utf-8")) if (directory / "settings.json").exists() else {}
         configured_address = config.get("CARRIEX_PUBLIC_URL")
         if config.get("CARRIEX_HOST"):
@@ -213,7 +242,11 @@ def main(argv=None):
         name = args.name if args.name is not None else config.get("CARRIEX_SERVER_NAME", settings.get("name", "Carriex server"))
         if not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
             raise ValueError("Server name must contain 1-80 printable characters")
-        print(f"Config: {Path(args.config).resolve()}\nServer: {address}\nListening: {bind}:{listen_port}\nIdentity directory: {directory}", flush=True)
+        print(f"Config: {Path(args.config).resolve()}\nServer: {address}\nListening: {bind}:{listen_port}\nPrivate identity directory: {directory}", flush=True)
+        if export_directory is not None:
+            print(f"Public pairing export directory: {export_directory}", flush=True)
+            if not export_directory.exists():
+                print("Public pairing export directory will be created on startup.", flush=True)
         if listen_port != public_port:
             print(f"Port mapping required: phones reach {public_port}; this process listens on {listen_port}.", flush=True)
         if args.check_config:
@@ -227,9 +260,13 @@ def main(argv=None):
                     set_key(args.config, key, value)
             print("Paired settings added to .env. Review it before starting.", flush=True)
             return
-        bundle, fingerprint = prepare_pairing(directory, address, name)
+        if export_directory is not None:
+            export_directory = pairing_export_directory(str(export_directory), directory, create=True)
+        bundle, fingerprint = prepare_pairing(directory, address, name, export_directory)
         print(f"Server: {bundle['url']}\nFingerprint: {fingerprint}\n"
               f"Open QR: {directory / 'pairing.html'}\nPairing text: {directory / 'pairing.json'}", flush=True)
+        if export_directory is not None:
+            print(f"Public pairing copy: {export_directory / 'pairing.html'} (with pairing.png and pairing.json)", flush=True)
         if args.pair_only:
             return
         # Paired mode terminates TLS itself. It never accepts spoofed forwarded
@@ -237,6 +274,9 @@ def main(argv=None):
         os.environ["CARRIEX_AUTH_ORIGIN"] = bundle["url"]
         os.environ["CARRIEX_ALLOW_INSECURE_HTTP"] = "0"
         os.environ["CARRIEX_TRUST_PROXY"] = "0"
+        os.environ["CARRIEX_DATA_DIR"] = str(directory)
+        if config.get("CARRIEX_MESSAGE_TTL_SECONDS"):
+            os.environ["CARRIEX_MESSAGE_TTL_SECONDS"] = config["CARRIEX_MESSAGE_TTL_SECONDS"]
         cert, key = str(directory / "server-cert.pem"), str(directory / "server-key.pem")
         if os.name != "nt":
             binding = f"[{bind}]:{listen_port}" if ":" in bind else f"{bind}:{listen_port}"

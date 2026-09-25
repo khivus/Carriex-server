@@ -61,7 +61,8 @@ def server_factory(tmp_path):
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 self.port = sock.getsockname()[1]
-            self.config = {"ALLOW_INSECURE_HTTP": True, **config}
+            self.config = {"ALLOW_INSECURE_HTTP": True,
+                           "MESSAGE_DATA_DIR": str(tmp_path / f"data-{self.port}"), **config}
             self.process = None
             self.log_path = tmp_path / f"server-{self.port}.log"
             self.log = self.log_path.open("w", encoding="utf-8")
@@ -139,7 +140,7 @@ def client(server_port, sessions):
             if path == "/send" or path.startswith("/messages/"):
                 identity = user_id("alice")
                 if path.startswith("/messages/"):
-                    identity = path.removeprefix("/messages/")
+                    identity = path.removeprefix("/messages/").split("/", 1)[0]
                 elif isinstance(json, dict) and json.get("sender"):
                     identity = json["sender"]
                 headers.setdefault("Authorization", "Bearer " + sessions(identity))

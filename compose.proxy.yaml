@@ -8,9 +8,15 @@ services:
       CARRIEX_ALLOW_INSECURE_HTTP: "${CARRIEX_ALLOW_INSECURE_HTTP:-0}"
       CARRIEX_TRUST_PROXY: "${CARRIEX_TRUST_PROXY:-0}"
       CARRIEX_AUTH_ORIGIN: "${CARRIEX_AUTH_ORIGIN:-}"
+      CARRIEX_DATA_DIR: /var/lib/carriex
+      CARRIEX_MESSAGE_TTL_SECONDS: "${CARRIEX_MESSAGE_TTL_SECONDS:-2592000}"
+    volumes:
+      - server-messages:/var/lib/carriex
     restart: unless-stopped
     init: true
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+volumes:
+  server-messages:

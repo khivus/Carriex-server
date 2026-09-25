@@ -4,7 +4,9 @@ from src.auth import valid_user_id
 
 from src._version import __version__
 
-from src.store import message_store, route_message, store_lock, websocket_connections
+import re
+
+from src.store import acknowledge_messages, route_message, store, store_lock, websocket_connections
 
 
 api = Blueprint("api", __name__)
@@ -32,22 +34,49 @@ def send_message():
     if not valid_user_id(recipient) or not isinstance(ciphertext, str):
         return jsonify(error="Invalid recipient or ciphertext"), 400
 
-    _, delivered, queued_count = route_message(g.user_id, recipient, ciphertext)
+    message_id = data.get("id")
+    if message_id is not None and (not isinstance(message_id, str) or re.fullmatch(r"[0-9a-f]{32}", message_id) is None):
+        return jsonify(error="Invalid message ID"), 400
+    try:
+        message, delivered, queued_count = route_message(g.user_id, recipient, ciphertext, message_id)
+    except OverflowError as exc:
+        return jsonify(error=str(exc)), 429
+    except ValueError as exc:
+        return jsonify(error=str(exc)), 409
 
     return jsonify({
         "status": "ok",
         "delivered": delivered,
         "message_count": queued_count,
+        "id": message["id"],
     }), 201
 
 
 @api.route("/messages/<user_id>", methods=["GET"])
 def get_messages(user_id):
     """GET /messages/<user_id>"""
-    with store_lock:
-        messages = message_store.pop(user_id, [])
+    messages = store().inbox(user_id)
 
     return jsonify({"messages": messages}), 200
+
+
+@api.route("/messages/<user_id>/ack", methods=["POST"])
+def ack_messages(user_id):
+    data = request.get_json(silent=True)
+    ids = data.get("ids") if isinstance(data, dict) else None
+    if not isinstance(ids, list) or len(ids) > 500 or any(
+        not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{32}", value) is None for value in ids
+    ):
+        return jsonify(error="Invalid message IDs"), 400
+    report_delivery = data.get("report_delivery", True)
+    if not isinstance(report_delivery, bool):
+        return jsonify(error="Invalid report_delivery"), 400
+    return jsonify(acknowledged=acknowledge_messages(user_id, ids, report_delivery)), 200
+
+
+@api.route("/statuses/<user_id>", methods=["GET"])
+def get_statuses(user_id):
+    return jsonify(statuses=store().statuses(user_id)), 200
 
 
 @api.route("/health", methods=["GET"])

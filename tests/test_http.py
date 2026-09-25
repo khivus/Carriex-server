@@ -42,7 +42,7 @@ class TestHTTPBasicFunctionality:
         assert messages[0]["ciphertext"] == "encrypted_message_content"
         assert "timestamp" in messages[0]
 
-    def test_get_messages_clears_after_fetch(self, client):
+    def test_get_messages_waits_for_acknowledgement(self, client):
         client.post("/send", json={
             "sender": user_id("alice"),
             "recipient": user_id("bob"),
@@ -51,7 +51,10 @@ class TestHTTPBasicFunctionality:
         response = client.get("/messages/" + user_id("bob"))
         assert len(response.json()["messages"]) == 1
         response = client.get("/messages/" + user_id("bob"))
-        assert response.json()["messages"] == []
+        message_id = response.json()["messages"][0]["id"]
+        response = client.post("/messages/" + user_id("bob") + "/ack", json={"ids": [message_id]})
+        assert response.status_code == 200
+        assert client.get("/messages/" + user_id("bob")).json()["messages"] == []
 
 
 class TestHTTPMessageRouting:

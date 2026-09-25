@@ -1,0 +1,12 @@
+# Optional public pairing export to an existing host directory.
+# Use with compose.paired.yaml; never mount the private identity volume here.
+services:
+  server:
+    environment:
+      CARRIEX_PAIRING_EXPORT_DIR: /var/lib/carriex-pairing-export
+    volumes:
+      - type: bind
+        source: ${CARRIEX_PAIRING_EXPORT_DIR:?Set CARRIEX_PAIRING_EXPORT_DIR to an existing host directory}
+        target: /var/lib/carriex-pairing-export
+        bind:
+          create_host_path: false

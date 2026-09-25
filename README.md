@@ -3,6 +3,20 @@
 Run your own Carriex chat server, then connect phones by scanning its QR code.
 You do not need to register a website or install another app on the phones.
 
+## Message storage
+
+The server saves opaque encrypted messages in `messages.sqlite3` inside its
+private data directory (`.carriex-server` by default, `/var/lib/carriex` in the
+paired Docker volume). Pending messages survive server restarts. They expire
+after 30 days by default; set `CARRIEX_MESSAGE_TTL_SECONDS` in the server
+environment to change this. Each recipient queue holds at most 1,000 messages.
+The server deletes a message's ciphertext only after the recipient acknowledges
+its ID, or when it expires. Fetching and WebSocket transmission alone do not
+remove it. The sender can query its message states; a recipient can acknowledge
+with `report_delivery: false` to clear the queue without revealing receipt.
+The phone owns its saved chat history. Keep the private data volume when
+recreating the server container.
+
 ## 1. Set your address and port
 
 The settings file is **`.env` in this folder**, beside this README.
@@ -22,6 +36,10 @@ CARRIEX_SERVER_NAME='Carriex-server'
   Use `8443` or change it to `443`. With 443, the address is just
   `https://192.168.0.34`; with 8443 it is `https://192.168.0.34:8443`.
 - `CARRIEX_SERVER_NAME` is the name displayed on phones.
+- Optionally set `CARRIEX_PAIRING_EXPORT_DIR` to a
+  folder for public `pairing.html`, `pairing.png`, and `pairing.json`
+  copies. Docker needs the optional Compose export override; see
+  [PAIRING.md](PAIRING.md).
 
 Save the file. Restart the server after editing it. Startup checks the settings,
 prints the address and listening port, and refreshes the QR/text. Address changes

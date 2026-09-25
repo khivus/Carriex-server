@@ -47,6 +47,17 @@ development/testing. Use the Docker/Gunicorn option below for a deployed service
    friend's QR. The chat screen shows connection/reconnection status.
 
 The scanner is built into Carriex. Text import works without camera permission.
+To keep a second copy of the public pairing files in a convenient folder with
+the native .bat/.sh/Python launcher, set
+`CARRIEX_PAIRING_EXPORT_DIR` in `.env` to its path. For example, set
+`CARRIEX_PAIRING_EXPORT_DIR=./pairing-export`. On each startup, the server refreshes
+`pairing.html`, `pairing.png`, and `pairing.json` there as well as in
+`.carriex-server`. The HTML page needs the PNG beside it. The native launcher
+creates a missing export folder on startup. A file at that path or a folder inside
+the private identity directory stops startup with an error. `--check-config`
+shows the path without creating it; `--pair-only` creates it and generates the files.
+The terminal labels `.carriex-server` as the **private identity directory** and
+the optional destination as the **public pairing export directory**.
 Only import a bundle obtained directly from the server owner through a trusted
 channel. An attacker who replaces the initial QR/text could substitute their own
 server. The displayed fingerprint lets you compare the server key with the owner.
@@ -138,6 +149,19 @@ Open `pairing-export/pairing.html`. The published port defaults to 8443; set
 private volume securely. Default `docker compose` includes this paired file;
 `compose.proxy.yaml` is the separate old HTTP reverse-proxy deployment. Docker's
 internal listener remains 8443; the configured host port maps to it automatically.
+
+For automatic Docker export instead of the three `docker compose cp` commands,
+create a host directory, set `CARRIEX_PAIRING_EXPORT_DIR` in `.env` to its absolute
+host path, and start with both Compose files:
+
+```powershell
+docker compose -f compose.paired.yaml -f compose.pairing-export.yaml up --build -d
+```
+
+The override requires the host directory to exist and be writable by the
+container's `carriex` user. It mounts only the public export folder; the private
+identity stays in its separate volume. Open `pairing.html` from the configured
+folder. Include both Compose files for later `logs`, `up`, and `down` commands.
 
 For native Linux, install `python -m pip install '.[server]'` and run
 `python -m src.pairing --address https://YOUR_REACHABLE_IP:8443`. Linux uses one

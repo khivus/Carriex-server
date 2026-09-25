@@ -55,7 +55,7 @@ class TestHTTPResponseFormat:
     def test_send_response_structure(self, client):
         response = client.post("/send", json={"sender": user_id("alice"), "recipient": user_id("bob"), "ciphertext": "msg"})
         data = response.json()
-        assert set(data) == {"status", "delivered", "message_count"}
+        assert set(data) == {"status", "delivered", "message_count", "id"}
         assert data["status"] == "ok"
 
     def test_get_messages_response_structure(self, client):
@@ -63,4 +63,4 @@ class TestHTTPResponseFormat:
         data = client.get("/messages/" + user_id("bob")).json()
         assert "messages" in data
         message = data["messages"][0]
-        assert set(message) == {"from", "ciphertext", "timestamp"}
+        assert set(message) == {"from", "ciphertext", "timestamp", "id"}

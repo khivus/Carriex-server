@@ -61,7 +61,7 @@ class TestWebSocketSend:
         assert response.status_code == 201
         data = response.json()
         assert data["delivered"] is True
-        assert data["message_count"] == 0
+        assert data["message_count"] == 1
         received = receive_json(bob)
         assert received["type"] == "message"
         assert received["message"]["from"] == user_id("alice")
@@ -102,6 +102,10 @@ class TestWebSocketReconnect:
         assert [receive_json(bob)["message"]["ciphertext"] for _ in range(10)] == [str(n) for n in range(10)]
         bob.send(json.dumps({"type": "health"}))
         assert receive_json(bob) == {"type": "health", "status": "alive"}
+        pending = client.get("/messages/" + user_id("bob")).json()["messages"]
+        assert len(pending) == 10
+        assert client.post("/messages/" + user_id("bob") + "/ack",
+                           json={"ids": [message["id"] for message in pending]}).status_code == 200
         assert client.get("/messages/" + user_id("bob")).json()["messages"] == []
 
     def test_closing_old_socket_keeps_new_connection(self, client, websocket, receive_json):

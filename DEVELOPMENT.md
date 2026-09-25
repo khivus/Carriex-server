@@ -79,9 +79,11 @@ Queued messages disappear on restart; there is no persistent storage.
 | `GET /health` | Status, project version, connected users and clients |
 | `POST /auth/challenge` | Starts proof of possession for a P-256 public key |
 | `POST /auth/verify` | Verifies a one-time signature; enrolls device and issues session |
-| `POST /send` | Accepts `sender`, `recipient`, `ciphertext`; delivers or queues |
-| `GET /messages/<user_id>` | Retrieves and removes queued messages |
-| `WS /ws/<user_id>` | Delivers queued messages on connect and live messages |
+| `POST /send` | Accepts `id` (32 lowercase hex), `sender`, `recipient`, `ciphertext`; durably queues and offers live delivery |
+| `GET /messages/<user_id>` | Lists pending messages without removing them |
+| `POST /messages/<user_id>/ack` | Accepts `ids` and optional `report_delivery`; retires ciphertext after phone storage |
+| `GET /statuses/<user_id>` | Returns sender-visible `queued`/`received` states |
+| `WS /ws/<user_id>` | Offers pending and live messages; supports `ack` and receipt events |
 
 The messaging endpoints and WebSocket upgrade require `Authorization: Bearer <token>`.
 Use the proof exchange in [AUTHENTICATION.md](AUTHENTICATION.md) to obtain it.
@@ -91,11 +93,13 @@ WebSocket clients send `{"type":"health"}` or
 `{"type":"send","recipient":"bob","ciphertext":"encrypted-payload"}`.
 The connection's user ID supplies the sender. Replies use `health`, `sent`, or
 `error`; deliveries have the shape
-`{"type":"message","message":{"from":"alice","ciphertext":"encrypted-payload","timestamp":"..."}}`.
+`{"type":"message","message":{"id":"...","from":"alice","ciphertext":"encrypted-payload","timestamp":"..."}}`.
 
 User IDs are authenticated and inbox access is restricted to their owner.
-Message retrieval remains destructive. Public-key/session storage is currently
-in memory. Use TLS and deployment-level rate limits for remote use.
+Message retrieval is non-destructive. The server keeps ciphertext until an
+acknowledgement or TTL expiry, and retries are idempotent by message ID.
+Public-key/session storage is currently in memory. Use TLS and deployment-level
+rate limits for remote use.
 See [SECURITY.md](SECURITY.md).
 
 ## Checks and packaging
