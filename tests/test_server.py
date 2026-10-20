@@ -378,7 +378,9 @@ class TestHTTPResponseFormat:
             "ciphertext",
             "timestamp",
             "id",
+            "cursor",
         }
+        assert isinstance(message["cursor"], int) and message["cursor"] > 0
 
 
 # ============================================================================

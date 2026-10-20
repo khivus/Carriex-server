@@ -51,7 +51,9 @@ request supplies `X-Forwarded-Proto: https`.
    bytes, encoded as unpadded base64url.
 4. Supply `Authorization: Bearer <token>` on `/send`, `/messages/<user_id>`, and
    the WebSocket upgrade `/ws/<user_id>`. Tokens never appear in URLs. The server
-   stores token hashes only. The app keeps tokens only in RAM.
+   stores token hashes only. Full session tokens live only in RAM. Separate
+   [notification credentials](NOTIFICATIONS.md) are persisted encrypted on Android
+   and hashed on the server; they authorize only the owner's count GET.
 
 The server audience is included in the signed proof to prevent a malicious
 Carriex server relaying a challenge to impersonate the device at another server.
@@ -76,9 +78,10 @@ when capacity is reached. Expired entries are pruned during authentication.
 Deployment-level rate limits are still needed for an internet-facing service.
 Registry capacity is intentionally bounded until persistence/admin controls exist.
 
-Use a single server worker. Restart discards the registry, tokens, challenges,
-and message queues; the same device can enroll again under the same key-derived
-ID. A future shared database must preserve unique public-key/ID bindings and
+Use a single server worker. Restart discards the authentication registry, full
+session tokens and challenges; the same device can enroll again under the same
+key-derived ID. Encrypted message queues, prekeys, and restricted notification
+credentials persist in SQLite. A future shared registry must preserve public-key/ID bindings and
 atomic challenge consumption, and use shared session state before adding workers.
 There is no device revocation/admin account management yet. The one-hour token
 lifetime limits a stolen token's validity; private-key compromise requires a new
@@ -86,8 +89,8 @@ identity and notifying contacts.
 
 TLS protects bearer tokens and the authenticated WebSocket stream. End-to-end
 message encryption remains a separate protocol. Socket send acceptance is not a
-delivery receipt, and this change does not implement durable delivery or an audit
-of the existing peer key-exchange protocol.
+delivery receipt. See [X3DH.md](X3DH.md) for the separate encryption protocol and
+its limits; this implementation has not had an independent security audit.
 
 ## Running
 

@@ -6,7 +6,7 @@ from src._version import __version__
 
 import re
 
-from src.store import acknowledge_messages, route_message, store, store_lock, websocket_connections
+from src.store import MessageTooLargeError, acknowledge_messages, route_message, store, store_lock, websocket_connections
 
 
 api = Blueprint("api", __name__)
@@ -39,6 +39,8 @@ def send_message():
         return jsonify(error="Invalid message ID"), 400
     try:
         message, delivered, queued_count = route_message(g.user_id, recipient, ciphertext, message_id)
+    except MessageTooLargeError as exc:
+        return jsonify(error=str(exc)), 413
     except OverflowError as exc:
         return jsonify(error=str(exc)), 429
     except ValueError as exc:
@@ -55,9 +57,28 @@ def send_message():
 @api.route("/messages/<user_id>", methods=["GET"])
 def get_messages(user_id):
     """GET /messages/<user_id>"""
-    messages = store().inbox(user_id)
+    after = request.args.get("after", "0")
+    if not after.isascii() or not after.isdigit() or len(after) > 18:
+        return jsonify(error="Invalid inbox cursor"), 400
+    messages = store().inbox(user_id, int(after))
 
     return jsonify({"messages": messages}), 200
+
+
+@api.post("/messages/<user_id>/policy")
+def inbox_policy(user_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Invalid inbox policy"), 400
+    contacts, blocked = data.get("contacts"), data.get("blocked")
+    if any(not isinstance(values, list) or len(values) > 128 or any(not valid_user_id(value) for value in values)
+           for values in (contacts, blocked)):
+        return jsonify(error="At most 128 contacts and 128 blocked IDs are supported"), 400
+    try:
+        store().policy(user_id, contacts, blocked)
+    except OverflowError as exc:
+        return jsonify(error=str(exc)), 429
+    return jsonify(status="ok"), 200
 
 
 @api.route("/messages/<user_id>/ack", methods=["POST"])
@@ -71,6 +92,11 @@ def ack_messages(user_id):
     report_delivery = data.get("report_delivery", True)
     if not isinstance(report_delivery, bool):
         return jsonify(error="Invalid report_delivery"), 400
+    quarantine = data.get("quarantine", False)
+    if not isinstance(quarantine, bool):
+        return jsonify(error="Invalid quarantine flag"), 400
+    if quarantine:
+        return jsonify(acknowledged=store().quarantine(user_id, ids)), 200
     return jsonify(acknowledged=acknowledge_messages(user_id, ids, report_delivery)), 200
 
 

@@ -17,6 +17,8 @@ Requires Python 3.11 or newer.
 
 Device authentication is required. See [AUTHENTICATION.md](AUTHENTICATION.md)
 for the protocol, TLS setup, and migration from old unauthenticated IDs.
+The [X3DH directory and encrypted-envelope protocol](X3DH.md) documents the
+authenticated `/prekeys` APIs, client key binding, rotation and retry rules.
 
 ```sh
 python -m venv .venv
@@ -69,8 +71,9 @@ docker run --rm -p 127.0.0.1:5000:5000 carriex-server
 
 The container uses one Gunicorn worker with 100 threads. Active WebSocket
 connections occupy threads, so leave capacity for HTTP requests. Do not increase
-workers or scale replicas: queues and connections are process-local.
-Queued messages disappear on restart; there is no persistent storage.
+workers or scale replicas: live connections and authentication sessions are
+process-local. Queued ciphertext, public prekeys, and restricted notification
+credentials persist in SQLite. Preserve the private data directory on restart.
 
 ## API
 
@@ -80,13 +83,19 @@ Queued messages disappear on restart; there is no persistent storage.
 | `POST /auth/challenge` | Starts proof of possession for a P-256 public key |
 | `POST /auth/verify` | Verifies a one-time signature; enrolls device and issues session |
 | `POST /send` | Accepts `id` (32 lowercase hex), `sender`, `recipient`, `ciphertext`; durably queues and offers live delivery |
-| `GET /messages/<user_id>` | Lists pending messages without removing them |
-| `POST /messages/<user_id>/ack` | Accepts `ids` and optional `report_delivery`; retires ciphertext after phone storage |
+| `GET /messages/<user_id>?after=<cursor>` | Lists up to 500 pending messages with pagination cursors |
+| `GET /messages/<user_id>/count` | Returns only `pending_count` and arrival `revision`; does not download/ack messages |
+| `POST /notifications/token` | Issues/replaces a persistent credential restricted to the owner's count GET |
+| `DELETE /notifications/token` | Revokes that count credential; requires full device authentication |
+| `POST /messages/<user_id>/ack` | Accepts `ids`, optional `report_delivery` or `quarantine`; quarantining suppresses receipts |
+| `POST /messages/<user_id>/policy` | Sets bounded contact/block lists and reserves inbox capacity |
 | `GET /statuses/<user_id>` | Returns sender-visible `queued`/`received` states |
 | `WS /ws/<user_id>` | Offers pending and live messages; supports `ack` and receipt events |
 
 The messaging endpoints and WebSocket upgrade require `Authorization: Bearer <token>`.
 Use the proof exchange in [AUTHENTICATION.md](AUTHENTICATION.md) to obtain it.
+The [notification protocol](NOTIFICATIONS.md) describes count-only credentials,
+Android scheduling, custom intervals, and practical measurement.
 IDs below are placeholders for full 64-character public-key fingerprints.
 
 WebSocket clients send `{"type":"health"}` or
@@ -136,5 +145,5 @@ WebSocket heartbeat pings run every 25 seconds. Reconnecting clients receive
 queued messages; a failed backlog send restores the failed item and unsent tail.
 Run `.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider` on Windows.
 Tests start isolated localhost servers and include reconnect/backlog delivery and
-overlapping connections for the same user. Queues remain process-local and are
-lost on server restart; socket send success does not prove recipient receipt.
+overlapping connections for the same user. Queues persist across server restart;
+socket send success does not prove recipient receipt.

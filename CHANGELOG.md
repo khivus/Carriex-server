@@ -4,6 +4,25 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-20
+
+### Added
+- Admin-managed groups with signed membership transitions, accepted invitations,
+  permanent admin ownership, sender-key distribution and encrypted fan-out.
+  Every join, removal and leave advances the membership epoch and requires
+  every current sender to rotate its keys before sending again. See `GROUPS.md`.
+- Count-only notification GET with persistent, revocable credentials restricted
+  to the owner's counts; indexed queue counts and arrival revisions.
+- Optional persistent hourly relay statistics, a localhost dashboard, and JSON/CSV
+  export for practical experiments (`CARRIEX_STATISTICS=1`).
+
+### Fixed
+- Group event history is authorized per membership period. New members and
+  invitees cannot download earlier activity, and rejoining does not reveal an
+  absence. Admin-signed join checkpoints replace full-history bootstrapping.
+- Oversized messages return HTTP 413, distinct from temporary capacity limits.
+- Paired `.env` parsing accepts the documented queue TTL setting.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added

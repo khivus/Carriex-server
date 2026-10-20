@@ -34,6 +34,15 @@ def public_key(identity):
     )).decode("ascii")
 
 
+def sign_encryption_identity(identity, encryption_key):
+    payload = f"Carriex encryption identity v2\n{identity}\n{encryption_key}"
+    return base64.b64encode(_keys[identity].sign(payload.encode("ascii"), ec.ECDSA(hashes.SHA256()))).decode("ascii")
+
+
+def sign_group_state(identity, payload):
+    return base64.b64encode(_keys[identity].sign(payload, ec.ECDSA(hashes.SHA256()))).decode("ascii")
+
+
 def sign(identity, challenge, claimed_id=None, audience=None):
     origin = audience if audience is not None else _audiences[challenge]
     payload = f"Carriex device authentication v1\n{origin}\n{claimed_id or identity}\n{challenge}"

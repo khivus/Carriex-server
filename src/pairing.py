@@ -212,9 +212,14 @@ def main(argv=None):
     parser.add_argument("--check-config", action="store_true", help="Validate and display settings without changing keys or starting")
     parser.add_argument("--init-config", action="store_true", help="Add paired settings to .env from the saved address or --address")
     parser.add_argument("--pair-only", action="store_true", help="Generate QR/text without starting a listener")
+    parser.add_argument("--statistics", action=argparse.BooleanOptionalAction, default=None,
+                        help="Save hourly relay statistics (default: disabled; see CARRIEX_STATISTICS)")
     args = parser.parse_args(argv)
     try:
         config = read_config(args.config)
+        from src.statistics import enabled_value, retention_days
+        statistics = args.statistics if args.statistics is not None else enabled_value(config.get("CARRIEX_STATISTICS", "0"))
+        statistics_days = retention_days(config.get("CARRIEX_STATISTICS_RETENTION_DAYS", 30))
         directory = Path(args.data_dir or config.get("CARRIEX_IDENTITY_DIR") or ".carriex-server").resolve()
         export_directory = pairing_export_directory(
             args.pairing_export_dir if args.pairing_export_dir is not None else config.get("CARRIEX_PAIRING_EXPORT_DIR"),
@@ -243,6 +248,7 @@ def main(argv=None):
         if not name.strip() or len(name) > 80 or any(ord(c) < 32 for c in name):
             raise ValueError("Server name must contain 1-80 printable characters")
         print(f"Config: {Path(args.config).resolve()}\nServer: {address}\nListening: {bind}:{listen_port}\nPrivate identity directory: {directory}", flush=True)
+        print(f"Statistics: {'enabled' if statistics else 'disabled'} (retention {statistics_days} days)", flush=True)
         if export_directory is not None:
             print(f"Public pairing export directory: {export_directory}", flush=True)
             if not export_directory.exists():
@@ -275,6 +281,11 @@ def main(argv=None):
         os.environ["CARRIEX_ALLOW_INSECURE_HTTP"] = "0"
         os.environ["CARRIEX_TRUST_PROXY"] = "0"
         os.environ["CARRIEX_DATA_DIR"] = str(directory)
+        os.environ["CARRIEX_STATISTICS"] = "1" if statistics else "0"
+        os.environ["CARRIEX_STATISTICS_RETENTION_DAYS"] = str(statistics_days)
+        if statistics:
+            print(f"Statistics saved in: {directory / 'messages.sqlite3'}\n"
+                  f"View: python -m src.statistics --data-dir \"{directory}\" serve", flush=True)
         if config.get("CARRIEX_MESSAGE_TTL_SECONDS"):
             os.environ["CARRIEX_MESSAGE_TTL_SECONDS"] = config["CARRIEX_MESSAGE_TTL_SECONDS"]
         cert, key = str(directory / "server-cert.pem"), str(directory / "server-key.pem")

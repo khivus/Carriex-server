@@ -151,8 +151,18 @@ def register_auth(app):
             return None
         session = store().session(request.headers.get("Authorization", ""))
         if session is None:
-            return jsonify(error="Device authentication required"), 401
-        g.user_id, g.auth_expires_at = session
+            # A notification credential must never authorize inbox retrieval,
+            # acknowledgements, sending, or even issuance of another credential.
+            if request.endpoint == "notifications.pending_count" and request.method in {"GET", "HEAD"}:
+                from src.notifications import count_identity
+                owner = count_identity(request.headers.get("Authorization", ""))
+                if owner is None:
+                    return jsonify(error="Device authentication required"), 401
+                g.user_id, g.auth_expires_at = owner, time.monotonic()
+            else:
+                return jsonify(error="Device authentication required"), 401
+        else:
+            g.user_id, g.auth_expires_at = session
         path_user = (request.view_args or {}).get("user_id")
         if path_user is not None and path_user != g.user_id:
             return jsonify(error="Cannot access another device's messages"), 403

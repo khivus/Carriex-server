@@ -117,6 +117,15 @@ def test_bad_config_fails_before_touching_identity(tmp_path, text):
     assert not (tmp_path / "identity").exists()
 
 
+def test_statistics_mode_and_retention_are_explicit_and_validated(tmp_path):
+    text = "CARRIEX_HOST=localhost\nCARRIEX_STATISTICS=1\nCARRIEX_STATISTICS_RETENTION_DAYS=7\n"
+    result = run(tmp_path, text, "--check-config")
+    assert "Statistics: enabled (retention 7 days)" in result.stdout
+    assert "Statistics: disabled" in run(tmp_path, text, "--no-statistics", "--check-config").stdout
+    run(tmp_path, text.replace("=7", "=0"), "--check-config", success=False)
+    run(tmp_path, text.replace("STATISTICS=1", "STATISTICS=invalid"), "--check-config", success=False)
+
+
 def test_environment_overrides_file_and_cli_overrides_environment(tmp_path):
     text = "CARRIEX_HOST=localhost\nCARRIEX_PORT=8443"
     result = run(tmp_path, text, "--check-config", environment={"CARRIEX_PORT": "443"})

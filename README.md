@@ -3,6 +3,17 @@
 Run your own Carriex chat server, then connect phones by scanning its QR code.
 You do not need to register a website or install another app on the phones.
 
+Optional [practical-work statistics](STATISTICS.md) save hourly relay measurements
+across restarts. Enable `CARRIEX_STATISTICS=1`, then run
+`python -m src.statistics serve` for a local dashboard and CSV/JSON exports.
+
+Android [count-only notifications](NOTIFICATIONS.md) use the relay directly,
+with a 15-minute default and custom intervals. No external push provider is needed.
+
+[Group messaging](GROUPS.md) supports accepted invitations, a permanent admin,
+member removal and voluntary departure. Each membership change rotates every
+current sender's keys; distributions use the existing encrypted pairwise sessions.
+
 ## Message storage
 
 The server saves opaque encrypted messages in `messages.sqlite3` inside its
@@ -180,5 +191,15 @@ copy the identity; preserve/migrate its private storage if you need the same key
 See [identity and advanced setup](PAIRING.md), [authentication](AUTHENTICATION.md),
 and [developer/API documentation](DEVELOPMENT.md).
 
-Device sessions and pending messages are currently in memory and disappear when
-the server restarts. Phones can authenticate again with the same device ID.
+Bearer sessions are in memory; phones authenticate again with the same device ID
+after restart. Queued ciphertext and public X3DH prekeys persist in SQLite.
+Update both phones and the relay for X3DH. A recipient must publish prekeys once
+before receiving an encrypted first message while offline. See
+[X3DH setup, Double Ratchet and security limits](X3DH.md). Android wire v3 uses
+classical Double Ratchet; both phones must upgrade together. The current relay
+prekey API stays compatible and stores no ratchet secrets.
+Unknown senders enter bounded encrypted message requests on the phone. Contact
+and block lists are shared with the relay to reserve inbox capacity. Publication
+revisions, confirmed key-retention deadlines, session expiry and storage quotas
+require upgrading the relay and phones together. One-time-key fallback is off
+by default and can be enabled explicitly in the app's **Chat security** settings.

@@ -63,4 +63,5 @@ class TestHTTPResponseFormat:
         data = client.get("/messages/" + user_id("bob")).json()
         assert "messages" in data
         message = data["messages"][0]
-        assert set(message) == {"from", "ciphertext", "timestamp", "id"}
+        assert set(message) == {"from", "ciphertext", "timestamp", "id", "cursor"}
+        assert isinstance(message["cursor"], int) and message["cursor"] > 0
