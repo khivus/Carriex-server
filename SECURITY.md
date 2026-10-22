@@ -42,10 +42,14 @@ Protection of consumed keys and recovery after passive compromise depend on clea
 DH contributions, randomness and deletion. Device control, identity compromise,
 saved plaintext history, retained skipped keys and restored database snapshots
 remain risks. There is no post-quantum or independent-security-audit claim.
-Receipts remain server-reported delivery states, not read proofs.
+Delivery receipts remain server-reported states. Optional recipient read reports
+are off by default on Android and reveal viewing metadata to the relay and sender;
+they are not cryptographic read proofs. Quarantined and hidden-delivery messages
+cannot be reported read. Group messages retain delivery-only receipts.
 
 Group membership changes are signed and hash-linked. The founding admin can
-invite or remove people; invitees accept explicitly, members can leave, and admin
+invite or remove people and sign shared group-name changes; invitees review invitations or opt into automatic
+acceptance in Android settings, members can leave, and admin
 rights cannot be transferred. Each membership epoch uses fresh per-sender chain
 and signing keys, distributed through authenticated pairwise encryption. The relay
 rejects stale-epoch sends and denies removed members access. Group titles and

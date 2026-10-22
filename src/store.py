@@ -40,6 +40,8 @@ class MessageStore:
             columns = {row[1] for row in db.execute("PRAGMA table_info(messages)")}
             if "arrival" not in columns:
                 db.execute("ALTER TABLE messages ADD COLUMN arrival INTEGER NOT NULL DEFAULT 0")
+            if "viewed" not in columns:
+                db.execute("ALTER TABLE messages ADD COLUMN viewed INTEGER NOT NULL DEFAULT 0")
             db.execute("CREATE INDEX IF NOT EXISTS inbox_counts ON messages(recipient,state,expires_at,arrival)")
             db.execute("DROP INDEX IF EXISTS inbox")
             db.execute("CREATE TABLE IF NOT EXISTS message_sequence (id INTEGER PRIMARY KEY CHECK(id=1),value INTEGER NOT NULL)")
@@ -186,11 +188,24 @@ class MessageStore:
                     self.statistics.record(db, "messages.quarantined")
         return count
 
+    def mark_read(self, recipient, ids):
+        receipts = []
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self.prune(db)
+            for message_id in ids:
+                row = db.execute("SELECT sender FROM messages WHERE id=? AND recipient=? AND state='received' AND receipt_visible=1 AND viewed=0",
+                                 (message_id, recipient)).fetchone()
+                if row is not None:
+                    db.execute("UPDATE messages SET viewed=1 WHERE id=?", (message_id,))
+                    receipts.append((row["sender"], message_id))
+        return receipts
+
     def statuses(self, sender):
         with self.connect() as db:
             self.prune(db)
-            rows = db.execute("SELECT id, state, receipt_visible FROM messages WHERE sender=? ORDER BY rowid LIMIT 500", (sender,)).fetchall()
-            return [{"id": row["id"], "state": row["state"] if row["receipt_visible"] else "sent"}
+            rows = db.execute("SELECT id, state, receipt_visible, viewed FROM messages WHERE sender=? ORDER BY rowid LIMIT 500", (sender,)).fetchall()
+            return [{"id": row["id"], "state": ("read" if row["viewed"] else row["state"]) if row["receipt_visible"] else "sent"}
                     for row in rows]
 
 

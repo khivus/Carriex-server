@@ -4,6 +4,21 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-22
+
+### Added
+- Permanent group admins can publish signed group-name changes visible to current
+  members. Renames preserve membership and sender-key epochs; invitations issued
+  before a rename still join through the existing admission-checkpoint flow.
+- Optional direct-message read reports at `POST /messages/<own-id>/read`, separate
+  from recipient delivery acknowledgements. Authenticated recipients can report
+  already delivered messages; status polling and WebSocket receipts expose `read`.
+  Reports persist through restart, are idempotent, and do not reveal quarantined
+  or hidden-delivery messages. Android read reporting is disabled by default.
+- Android drawer/settings reorganization, opt-in request auto-accept, shared
+  message/group request review, independent invitation alerts, and theme/accent
+  preferences.
+
 ## [0.4.0] - 2026-10-20
 
 ### Added

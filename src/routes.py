@@ -6,7 +6,7 @@ from src._version import __version__
 
 import re
 
-from src.store import MessageTooLargeError, acknowledge_messages, route_message, store, store_lock, websocket_connections
+from src.store import MessageTooLargeError, acknowledge_messages, route_message, send_event, store, store_lock, websocket_connections
 
 
 api = Blueprint("api", __name__)
@@ -103,6 +103,21 @@ def ack_messages(user_id):
 @api.route("/statuses/<user_id>", methods=["GET"])
 def get_statuses(user_id):
     return jsonify(statuses=store().statuses(user_id)), 200
+
+
+@api.post("/messages/<user_id>/read")
+def read_messages(user_id):
+    """Optional recipient-reported viewing, separate from durable delivery."""
+    data = request.get_json(silent=True)
+    ids = data.get("ids") if isinstance(data, dict) else None
+    if not isinstance(ids, list) or len(ids) > 500 or any(
+        not isinstance(value, str) or re.fullmatch(r"[0-9a-f]{32}", value) is None for value in ids
+    ):
+        return jsonify(error="Invalid message IDs"), 400
+    receipts = store().mark_read(user_id, ids)
+    for sender, message_id in receipts:
+        send_event(sender, {"type": "receipt", "id": message_id, "state": "read"})
+    return jsonify(read=len(receipts)), 200
 
 
 @api.route("/health", methods=["GET"])

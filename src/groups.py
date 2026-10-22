@@ -71,7 +71,7 @@ def validate_state(s):
         raise GroupError("At most 32 members and invitations combined are supported")
     if not isinstance(s["target"], str) or (s["target"] and not valid_user_id(s["target"])):
         raise GroupError("Invalid group target")
-    if not isinstance(s["action"], str) or s["action"] not in {"create", "invite", "join", "remove", "leave", "decline", "close"}:
+    if not isinstance(s["action"], str) or s["action"] not in {"create", "invite", "join", "remove", "leave", "decline", "close", "rename"}:
         raise GroupError("Invalid membership action")
     try:
         key_bytes = decode(s["auth_key"], 256)
@@ -93,12 +93,16 @@ def transition(old, s):
         return
     if old["closed"] or s["revision"] != old["revision"] + 1 or s["previous"] != state_hash(old):
         raise GroupError("Group membership changed; synchronize and retry", 409)
-    if any(s[k] != old[k] for k in ("id", "admin", "name")):
+    if any(s[k] != old[k] for k in ("id", "admin")):
         raise GroupError("The group admin and identity cannot be changed", 403)
+    if s["action"] != "rename" and s["name"] != old["name"]:
+        raise GroupError("Only an admin rename may change the group name", 403)
     members, invited = set(old["members"]), set(old["invited"])
     actor, target, action = s["actor"], s["target"], s["action"]
     closed = False
-    if action == "invite" and actor == old["admin"] and target not in members | invited:
+    if action == "rename" and actor == old["admin"] and target == "" and s["name"] != old["name"]:
+        pass
+    elif action == "invite" and actor == old["admin"] and target not in members | invited:
         invited.add(target)
     elif action == "join" and actor == target and actor in invited:
         invited.remove(actor)

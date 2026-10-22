@@ -88,6 +88,72 @@ def admission(joined, signer=None):
     return proof
 
 
+def renamed(old, actor, name):
+    state = change(old, actor, "rename")
+    state["name"] = name
+    return signed(state, actor)
+
+
+def test_admin_rename_reaches_members_preserves_epoch_and_survives_later_changes(actors):
+    admin, bob, carol = [user_id(label) for label in ("rename-admin", "rename-bob", "rename-carol")]
+    state = invite_join(actors, apply(actors, create(admin)), bob)
+    renamed_state = renamed(state, admin, "New shared name")
+    apply(actors, renamed_state)
+    apply(actors, renamed_state)  # A lost-response retry adds no second event.
+    assert renamed_state["epoch"] == state["epoch"]
+    assert renamed_state["members"] == state["members"]
+    for member in (admin, bob):
+        history = actors(member, "GET", f"/groups/{state['id']}/events").json()["events"]
+        assert history[-1] == renamed_state
+        assert sum(event["action"] == "rename" for event in history) == 1
+    invitation = apply(actors, change(renamed_state, admin, "invite", carol))
+    assert invitation["name"] == "New shared name"
+
+
+@pytest.mark.parametrize("who", ["member", "outsider"])
+def test_non_admin_cannot_rename_even_with_a_valid_device_signature(actors, who):
+    admin, bob, outsider = [user_id(label) for label in ("rename-auth-admin", "rename-auth-bob", "rename-auth-outsider")]
+    state = invite_join(actors, apply(actors, create(admin)), bob)
+    actor = bob if who == "member" else outsider
+    assert actors(actor, "POST", "/groups/state", renamed(state, actor, "Unauthorized")).status_code == 403
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 81, "bad\nname"])
+def test_admin_rename_rejects_invalid_names(actors, name):
+    admin = user_id("invalid-rename-admin")
+    state = apply(actors, create(admin))
+    assert actors(admin, "POST", "/groups/state", renamed(state, admin, name)).status_code == 400
+
+
+def test_rename_cannot_change_membership_or_bypass_named_action_and_stale_state(actors):
+    admin, bob = user_id("rename-integrity-admin"), user_id("rename-integrity-bob")
+    state = invite_join(actors, apply(actors, create(admin)), bob)
+    bad = renamed(state, admin, "Bad membership")
+    bad["members"] = [admin]
+    bad["epoch"] += 1
+    assert actors(admin, "POST", "/groups/state", signed(bad, admin)).status_code == 409
+    hidden = change(state, bob, "leave", bob)
+    hidden["name"] = "Hidden rename"
+    assert actors(bob, "POST", "/groups/state", signed(hidden, bob)).status_code == 403
+    latest = apply(actors, renamed(state, admin, "First rename"))
+    assert actors(admin, "POST", "/groups/state", renamed(state, admin, "Stale rename")).status_code == 409
+    closed = apply(actors, change(latest, admin, "close"))
+    assert actors(admin, "POST", "/groups/state", renamed(closed, admin, "Closed rename")).status_code == 409
+
+
+def test_invitation_before_rename_can_join_without_receiving_hidden_rename_history(actors):
+    admin, bob = user_id("rename-invite-admin"), user_id("rename-invite-bob")
+    initial = apply(actors, create(admin))
+    invitation = apply(actors, change(initial, admin, "invite", bob))
+    updated = apply(actors, renamed(invitation, admin, "Renamed before join"))
+    path = f"/groups/{initial['id']}"
+    assert actors(bob, "GET", path + "/events").json()["events"] == []
+    proposal = actors(bob, "GET", path + "/join-proposal").json()["state"]
+    assert proposal["name"] == updated["name"]
+    joined = apply(actors, signed(proposal, bob))
+    assert actors(bob, "GET", path + "/events").json()["events"] == [joined]
+
+
 def test_new_members_and_invitees_cannot_download_pre_join_events_even_with_old_cursors(actors):
     admin, old, new = [user_id(label) for label in ("privacy-admin", "former-person", "new-person")]
     state = invite_join(actors, apply(actors, create(admin)), old)

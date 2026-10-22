@@ -1,6 +1,6 @@
 # Android count notifications
 
-In Carriex, open the top-left menu and choose **Notifications**. Enable checks,
+In Carriex, open the top-left menu and choose **Settings > Notifications**. Enable checks,
 allow Android notifications, and select the saved servers to check. The default
 interval is **15 minutes**. Custom seconds, minutes, hours, and decimal values
 are accepted, with a minimum of one second. **Apply interval** saves the choice.
@@ -21,6 +21,23 @@ notification timing. Android notification permission and channel settings remain
 under the user's control. Google Play distribution requires review of the
 declared `specialUse` foreground service for intervals below 15 minutes.
 
+## Requests and invitations
+
+Separate **message request alerts** and **group invitation alerts** default to on.
+While connected in the foreground, verified invitations and locally saved unknown
+contact requests can notify immediately. Both notification types open the selected
+server's **Requests** page, with message requests and group invitations together.
+Repeated synchronization does not re-alert a dismissed invitation; accepting,
+declining, revocation, or leaving clears its alert. Background count checks include
+pending invitations but do not download group details. Specific invitation review
+becomes available after opening Carriex and connecting.
+
+**Settings > Chats** offers optional automatic acceptance of new contacts and group
+invitations. Both options default to off, retain block rules, and apply to saved
+servers. **Settings > Privacy** contains chat-security options and optional read
+reporting. Read reporting defaults to off and only applies to visible direct-chat
+messages. Delivery acknowledgements remain separate from viewing.
+
 ## What runs in the background
 
 Leaving the app closes its live messaging connection and five-second inbox
@@ -31,7 +48,7 @@ to the app reconnects the previous active server and preserves the current page
 and drafts. Opening a pending-message notification connects its saved server.
 
 Notifications display the server name and total number of queued, unexpired
-messages. This includes message requests; it is not a local unread-chat count.
+messages. This includes message requests, group messages, and group invitations; it is not a local unread-chat count.
 The notification contains no sender identity or message preview. One notification
 per server is updated in place. Dismissing it suppresses repeats for the same
 arrival revision. A new arrival can notify even if the total count is unchanged.
@@ -94,3 +111,17 @@ statistics contain aggregate endpoint measurements, not device IDs or tokens.
 Android references: [periodic jobs](https://developer.android.com/reference/android/app/job/JobInfo.Builder#setPeriodic(long)),
 [idle restrictions](https://developer.android.com/training/monitoring-device-state/doze-standby),
 [foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use).
+
+## Optional direct-message read reports
+
+With a full device bearer session, a recipient may send
+`POST /messages/<own-user-id>/read` with `{"ids":["<32-character lowercase hex ID>"]}`.
+At most 500 IDs are allowed. Only the authenticated recipient's messages that have
+already been delivered with visible delivery receipts are eligible. Queued,
+quarantined, hidden-delivery, expired, and other recipients' IDs are ignored.
+The response is `{"read":1}` for one newly updated message; retries return zero.
+The sender receives `{"type":"receipt","id":"...","state":"read"}` over its
+socket and sees `read` from `GET /statuses/<own-user-id>`. Read state survives relay
+restart for the existing message retention period. Count-only credentials cannot
+report read status. This is optional relay-reported viewing metadata, not proof of
+human reading. Updated clients are needed to display the additional state.

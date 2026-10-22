@@ -10,17 +10,23 @@ On a server's chat list, open the pencil button and choose **New group**. The
 creator is the permanent admin. Use the group's three-dot menu to invite a
 device ID, choose a saved contact, or scan the person's **My ID** QR code.
 Scanning opens an invitation confirmation for the current group and server.
-Invited people see **Join group** and **Decline** in their chat list;
+Invited people see **Join group** and **Decline** under **Requests > Group invitations**;
 they receive no sender key before accepting. The admin can select another
 person in **Group members** to remove them or revoke a pending invitation.
 Members can leave. The admin closes the group with **Delete group**; admin
 rights cannot be transferred. Saved history remains on each participating phone.
 Selecting a person in **Group members** also offers **Rename member**. Names are
 local to that phone and server, and update group message headers and activity.
-The founding admin and signed device identities remain unchanged.
+The founding admin and signed device identities remain unchanged. The admin can
+choose **Rename group** from the group menu to change its shared name for all
+current members. Names have 1 to 80 characters, with no control characters.
+The signed rename appears as an activity event and survives reconnection.
+Renaming preserves members, invitations, message history and sender keys.
+Pending invitations keep their original signed invitation title; after joining,
+they adopt the current shared title through the admin admission checkpoint.
 
 The Android conversation shows verified creation, invitation, join, removal,
-leave, decline and closure updates as activity messages. The removed or leaving
+leave, decline, rename and closure updates as activity messages. The removed or leaving
 person receives their terminal membership update; they do not receive later
 group changes. An invitation does not grant access to group activity. The server
 returns only events from the device's membership periods, starting with its own
@@ -40,11 +46,11 @@ audience. Each send refreshes membership without downloading every group's
 keys, incoming messages and delivery statuses. Joining and key preparation
 show progress in the conversation.
 Group invitations also alert while the app is open, using the existing message
-request alert preference and Android notification permission. Tapping opens the
-correct server's chat list. Repeated synchronization does not repeat an alert.
+invitation alert preference and Android notification permission. Tapping opens the
+correct server's shared Requests page. Repeated synchronization does not repeat an alert.
 
 Groups support up to 32 members and pending invitations combined, with up to
-64 groups per identity. Group titles currently remain as created.
+64 groups per identity. Only the permanent admin may rename a group.
 
 ## Membership authority
 
@@ -90,7 +96,10 @@ returns the matching proof only to that joining identity. Participation interval
 are transactionally maintained and reconstructed from existing signed events
 when upgrading the database.
 
-Only the founding admin may invite, remove, revoke or close. Joining requires
+Only the founding admin may invite, remove, revoke, rename or close. A rename
+uses `action=rename`, an empty target, a changed name and the next signed revision;
+all other fields except the previous hash and signature retain their prior values.
+The sender-key epoch stays unchanged. Other actions cannot change the name. Joining requires
 an invitation and the invited device's signature. Leaving or declining requires
 the affected device's own signature. Concurrent changes use the previous hash
 and revision as a compare-and-swap; synchronize before retrying a conflict.
