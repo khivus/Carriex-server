@@ -126,6 +126,18 @@ def test_html_escapes_operator_supplied_name(tmp_path):
     assert "&lt;script&gt;" in page
 
 
+def test_operator_name_matching_a_label_remains_literal_in_html_and_json(tmp_path):
+    directory = tmp_path / "identity"
+    name = "Select pairing text"
+    generate(directory, name=name)
+    page = (directory / "pairing.html").read_text(encoding="utf-8")
+    assert f"<h1>{name}</h1>" in page
+    assert bundle(directory)["name"] == name
+    from html import unescape
+    text = page.split('<textarea ', 1)[1].split('>', 1)[1].split('</textarea>', 1)[0]
+    assert json.loads(unescape(text))["name"] == name
+
+
 class TLSClient:
     def __init__(self, port, certificate):
         self.port = port

@@ -8,6 +8,7 @@ import base64
 import csv
 import hashlib
 import html
+from .web_localization import localize_page, translated_text
 import io
 import ipaddress
 import json
@@ -179,31 +180,18 @@ def prepare_pairing(directory, address, name="Carriex server", export_directory=
     pairing_png = image.getvalue()
     atomic_write(directory / "pairing.png", pairing_png)
     page = f'''<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Pair {html.escape(name)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title data-i18n="Carriex server pairing">Carriex server pairing</title>
 <style>body{{font:17px system-ui;max-width:850px;margin:40px auto;padding:0 20px;background:#f5f7fb;color:#162238}}
 img{{width:100%;max-width:600px;image-rendering:pixelated}}textarea{{width:100%;height:140px;box-sizing:border-box}}
 code{{overflow-wrap:anywhere}}button{{padding:12px;margin:12px 0}}</style>
 <h1>{html.escape(name)}</h1><p><strong>{html.escape(address)}</strong></p>
-<p>In Carriex, choose <strong>Scan server QR</strong>, or paste the text below using <strong>Import pairing text</strong>.</p>
-<img src="pairing.png" alt="Carriex server pairing QR code">
-<p>Server fingerprint: <code>{fingerprint}</code></p>
-<textarea id="pairing" readonly aria-label="Pairing text">{html.escape(text)}</textarea>
-<button onclick="document.getElementById('pairing').select()">Select pairing text</button>
-<p>This bundle contains only the public certificate. Share it through a trusted channel.
-Keep <code>server-key.pem</code> private and backed up. The address must be reachable from the phone.</p></html>'''
-    from .web_localization import localize_page, translated_text
-    page = page.replace(f"<title>Pair {html.escape(name)}</title>",
-                        '<title data-i18n="Carriex server pairing">Carriex server pairing</title>')
-    page = page.replace('In Carriex, choose <strong>Scan server QR</strong>, or paste the text below using <strong>Import pairing text</strong>.',
-                        translated_text('In Carriex, choose Scan server QR, or paste the text below using Import pairing text.'))
-    page = page.replace('alt="Carriex server pairing QR code"',
-                        'alt="Carriex server pairing QR code" data-i18n-alt="Carriex server pairing QR code"')
-    page = page.replace('aria-label="Pairing text"', 'aria-label="Pairing text" data-i18n-aria="Pairing text"')
-    for text_label in ('Server fingerprint:', 'Select pairing text',
-                       'This bundle contains only the public certificate. Share it through a trusted channel.'):
-        page = page.replace(text_label, translated_text(text_label))
-    page = page.replace('Keep <code>server-key.pem</code> private and backed up. The address must be reachable from the phone.',
-                        translated_text('Keep server-key.pem private and backed up. The address must be reachable from the phone.'))
+<p>{translated_text('In Carriex, choose Scan server QR, or paste the text below using Import pairing text.')}</p>
+<img src="pairing.png" alt="Carriex server pairing QR code" data-i18n-alt="Carriex server pairing QR code">
+<p>{translated_text('Server fingerprint:')} <code>{fingerprint}</code></p>
+<textarea id="pairing" readonly aria-label="Pairing text" data-i18n-aria="Pairing text">{html.escape(text)}</textarea>
+<button onclick="document.getElementById('pairing').select()">{translated_text('Select pairing text')}</button>
+<p>{translated_text('This bundle contains only the public certificate. Share it through a trusted channel.')}
+{translated_text('Keep server-key.pem private and backed up. The address must be reachable from the phone.')}</p></html>'''
     pairing_html = localize_page(page).encode("utf-8")
     atomic_write(directory / "pairing.html", pairing_html)
     if export_directory is not None:
