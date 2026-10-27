@@ -2,7 +2,7 @@
 
 **English** | [Русский](PAIRING.ru.md)
 
-For the simplest step-by-step setup, start with [README.md](README.md).
+For the simplest step-by-step setup, start with [README.md](../README.md).
 This page contains networking, identity, and advanced configuration details.
 
 Carriex can use an IP address and its own TLS certificate. You do not need to

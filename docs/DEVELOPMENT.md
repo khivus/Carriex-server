@@ -39,7 +39,7 @@ The explicit HTTP command above remains available for local protocol tests.
 
 ## Archived TLS setup
 
-The old private-CA deployment is archived in [deprecated/local-tls](deprecated/local-tls/README.md).
+The old private-CA deployment is archived in [deprecated/local-tls](../deprecated/local-tls/README.md).
 The active app now trusts individual self-signed server keys through QR/text
 pairing, while still checking HTTPS/WSS certificates and hostnames.
 
@@ -121,7 +121,7 @@ python -m ruff check .
 python -m build
 ```
 
-See [tests/README.md](tests/README.md) for integration test details. Dependencies
+See [tests/README.md](../tests/README.md) for integration test details. Dependencies
 are defined in `pyproject.toml`; `requirements.txt` installs the development
 extra. Dependency ranges are not a lockfile: builds may resolve newer compatible
 versions.

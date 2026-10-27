@@ -1,6 +1,6 @@
 # Changelog
 
-**English** | [Русский](CHANGELOG.ru.md)
+**English** | [Русский](docs/CHANGELOG.ru.md)
 
 All notable changes are recorded here. Versions follow Semantic Versioning.
 
@@ -9,6 +9,9 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 ### Added
 - English/Russian language controls for pairing and local statistics pages.
 - Russian README and documentation companions with English comparison tools.
+- Documentation lives in `docs/`; the English README and changelog remain at the
+  repository root with Russian-version links at the top. Source archives include
+  the moved documents and referenced deployment files.
 
 ### Fixed
 - CI installs the Linux server dependencies needed by real TLS listener tests.
@@ -36,7 +39,7 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 - Admin-managed groups with signed membership transitions, accepted invitations,
   permanent admin ownership, sender-key distribution and encrypted fan-out.
   Every join, removal and leave advances the membership epoch and requires
-  every current sender to rotate its keys before sending again. See `GROUPS.md`.
+  every current sender to rotate its keys before sending again. See [group protocol](docs/GROUPS.md).
 - Count-only notification GET with persistent, revocable credentials restricted
   to the owner's counts; indexed queue counts and arrival revisions.
 - Optional persistent hourly relay statistics, a localhost dashboard, and JSON/CSV

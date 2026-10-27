@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
-    echo Install the server dependencies first; see PAIRING.md.
+    echo Install the server dependencies first; see docs/PAIRING.md.
     pause
     exit /b 1
 )

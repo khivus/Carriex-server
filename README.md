@@ -1,18 +1,18 @@
 # Carriex Server
 
-**English** | [Русский](README.ru.md)
+**English** | [Русский](docs/README.ru.md)
 
 Run your own Carriex chat server, then connect phones by scanning its QR code.
 You do not need to register a website or install another app on the phones.
 
-Optional [practical-work statistics](STATISTICS.md) save hourly relay measurements
+Optional [practical-work statistics](docs/STATISTICS.md) save hourly relay measurements
 across restarts. Enable `CARRIEX_STATISTICS=1`, then run
 `python -m src.statistics serve` for a local dashboard and CSV/JSON exports.
 
-Android [count-only notifications](NOTIFICATIONS.md) use the relay directly,
+Android [count-only notifications](docs/NOTIFICATIONS.md) use the relay directly,
 with a 15-minute default and custom intervals. No external push provider is needed.
 
-[Group messaging](GROUPS.md) supports accepted invitations, a permanent admin,
+[Group messaging](docs/GROUPS.md) supports accepted invitations, a permanent admin,
 member removal and voluntary departure. Each membership change rotates every
 current sender's keys; distributions use the existing encrypted pairwise sessions.
 
@@ -52,7 +52,7 @@ CARRIEX_SERVER_NAME='Carriex-server'
 - Optionally set `CARRIEX_PAIRING_EXPORT_DIR` to a
   folder for public `pairing.html`, `pairing.png`, and `pairing.json`
   copies. Docker needs the optional Compose export override; see
-  [PAIRING.md](PAIRING.md).
+  [PAIRING.md](docs/PAIRING.md).
 
 Save the file. Restart the server after editing it. Startup checks the settings,
 prints the address and listening port, and refreshes the QR/text. Address changes
@@ -172,7 +172,7 @@ On each phone:
 - **Different Wi-Fi or mobile data:** a LAN address such as `192.168...` is not
   reachable over the internet. Use your public IP and forward that router port to
   your computer. If your ISP uses CGNAT, ask for a public IP or use a reachable VPS.
-  See [network setup](PAIRING.md#reaching-the-server-from-another-network).
+  See [network setup](docs/PAIRING.md#reaching-the-server-from-another-network).
 - **Port 443 fails:** check startup's `Listening:` line. Check for another program
   already using 443 and a firewall rule for it. Native Linux may restrict low ports.
   The launcher now uses the URL/configured port instead of silently using 8443.
@@ -190,14 +190,14 @@ trusted channel. A missing saved key causes startup to stop, not silently replac
 
 Native and Docker storage are separate. Switching modes does not automatically
 copy the identity; preserve/migrate its private storage if you need the same key.
-See [identity and advanced setup](PAIRING.md), [authentication](AUTHENTICATION.md),
-and [developer/API documentation](DEVELOPMENT.md).
+See [identity and advanced setup](docs/PAIRING.md), [authentication](docs/AUTHENTICATION.md),
+and [developer/API documentation](docs/DEVELOPMENT.md).
 
 Bearer sessions are in memory; phones authenticate again with the same device ID
 after restart. Queued ciphertext and public X3DH prekeys persist in SQLite.
 Update both phones and the relay for X3DH. A recipient must publish prekeys once
 before receiving an encrypted first message while offline. See
-[X3DH setup, Double Ratchet and security limits](X3DH.md). Android wire v3 uses
+[X3DH setup, Double Ratchet and security limits](docs/X3DH.md). Android wire v3 uses
 classical Double Ratchet; both phones must upgrade together. The current relay
 prekey API stays compatible and stores no ratchet secrets.
 Unknown senders enter bounded encrypted message requests on the phone. Contact

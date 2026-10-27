@@ -1,4 +1,4 @@
-<!-- English source SHA256: bfb71f8c5d531fbf74ee98cdaf07d6d2293e69bec61d3be10104ffd9fce444e3 -->
+<!-- English source SHA256: 421d2b8fee1752256c7c739952c2493764f45517dc2038bfc44e356244504783 -->
 # Подключение телефона к собственному серверу
 
 [English](PAIRING.md) | **Русский**

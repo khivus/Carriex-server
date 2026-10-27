@@ -16,6 +16,13 @@ Force-stopping Carriex stops checks until it is opened again. Normal reboot and
 app-update recovery reschedule enabled checks; if Android refuses a background
 service start, reopening Carriex resumes scheduling.
 
+On Android 14+, swiping away the foreground status notification hides it without
+stopping checks. Reopening Carriex or recreating its screen keeps it hidden while
+the same service instance runs. Interval/language changes update a visible status
+without restoring a dismissed one. A real service restart posts the required
+notification again. Switching to an interval of at least 15 minutes stops that
+service and uses periodic jobs instead.
+
 The optional battery optimization prompt explains the tradeoff and lets the user
 keep the current setting. **Battery optimization** opens this choice again.
 Exemption improves access during idle periods; it does not guarantee precise

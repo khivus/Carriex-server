@@ -1,4 +1,4 @@
-<!-- English source SHA256: 66c15023e84dff9db070ec83927714e3994460d86c79ffa0afbacbd2bb6aec32 -->
+<!-- English source SHA256: 5113efa24c214af2d02466fc5b734c8ba66110e9347f325cf730bba0a67c0f42 -->
 # Сервер Carriex
 
 [English](DEVELOPMENT.md) | **Русский**
@@ -29,7 +29,7 @@ python -m flask --app src.app:app run --host 127.0.0.1 --port 5000
 
 ## Архивная настройка TLS
 
-Старая схема с частным CA сохранена в [deprecated/local-tls](deprecated/local-tls/README.ru.md). Текущее приложение доверяет отдельным самоподписанным ключам через QR-код/текст, сохраняя проверку сертификатов HTTPS/WSS и имён узлов.
+Старая схема с частным CA сохранена в [deprecated/local-tls](../deprecated/local-tls/README.ru.md). Текущее приложение доверяет отдельным самоподписанным ключам через QR-код/текст, сохраняя проверку сертификатов HTTPS/WSS и имён узлов.
 
 ## Docker за обратным прокси (альтернативный API)
 
@@ -83,7 +83,7 @@ python -m ruff check .
 python -m build
 ```
 
-Подробности интеграционных тестов: [tests/README.ru.md](tests/README.ru.md). Зависимости определены в `pyproject.toml`; `requirements.txt` устанавливает extra для разработки. Диапазоны зависимостей не являются lockfile: сборка может выбрать новые совместимые версии.
+Подробности интеграционных тестов: [tests/README.ru.md](../tests/README.ru.md). Зависимости определены в `pyproject.toml`; `requirements.txt` устанавливает extra для разработки. Диапазоны зависимостей не являются lockfile: сборка может выбрать новые совместимые версии.
 
 ## Версии
 
