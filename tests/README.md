@@ -1,5 +1,7 @@
 ﻿# Integration tests
 
+**English** | [Русский](README.ru.md)
+
 Run from the project root:
 
 ```powershell

@@ -1,5 +1,7 @@
 # Carriex Server
 
+**English** | [Русский](README.ru.md)
+
 Run your own Carriex chat server, then connect phones by scanning its QR code.
 You do not need to register a website or install another app on the phones.
 

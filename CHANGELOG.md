@@ -1,8 +1,14 @@
 # Changelog
 
+**English** | [Русский](CHANGELOG.ru.md)
+
 All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
+
+### Added
+- English/Russian language controls for pairing and local statistics pages.
+- Russian README and documentation companions with English comparison tools.
 
 ## [0.5.0] - 2026-10-22
 

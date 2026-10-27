@@ -1,5 +1,7 @@
 # Local HTTPS setup
 
+**English** | [Русский](HTTPS.ru.md)
+
 The app defaults to HTTPS and port 443. The Python backend on port 5000 only speaks plain HTTP. This standalone deployment adds Caddy with a private CA for HTTPS and secure WebSockets, without exposing backend port 5000.
 
 1. Give the server a stable LAN IP (for example, a DHCP reservation). Add `SERVER_ADDRESS=192.168.1.10` to `.env`, replacing the example with the actual LAN IP or hostname used by the phones. Do not include a URL scheme, path or port. Preserve other existing settings.

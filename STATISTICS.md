@@ -1,5 +1,7 @@
 # Statistics for practical work
 
+**English** | [Русский](STATISTICS.ru.md)
+
 Collection is optional and disabled by default. Enable it in `.env`, then restart
 using `start-server.bat`, `./start-server.sh` or Docker Compose:
 

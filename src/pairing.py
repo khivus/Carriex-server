@@ -191,7 +191,20 @@ code{{overflow-wrap:anywhere}}button{{padding:12px;margin:12px 0}}</style>
 <button onclick="document.getElementById('pairing').select()">Select pairing text</button>
 <p>This bundle contains only the public certificate. Share it through a trusted channel.
 Keep <code>server-key.pem</code> private and backed up. The address must be reachable from the phone.</p></html>'''
-    pairing_html = page.encode("utf-8")
+    from .web_localization import localize_page, translated_text
+    page = page.replace(f"<title>Pair {html.escape(name)}</title>",
+                        '<title data-i18n="Carriex server pairing">Carriex server pairing</title>')
+    page = page.replace('In Carriex, choose <strong>Scan server QR</strong>, or paste the text below using <strong>Import pairing text</strong>.',
+                        translated_text('In Carriex, choose Scan server QR, or paste the text below using Import pairing text.'))
+    page = page.replace('alt="Carriex server pairing QR code"',
+                        'alt="Carriex server pairing QR code" data-i18n-alt="Carriex server pairing QR code"')
+    page = page.replace('aria-label="Pairing text"', 'aria-label="Pairing text" data-i18n-aria="Pairing text"')
+    for text_label in ('Server fingerprint:', 'Select pairing text',
+                       'This bundle contains only the public certificate. Share it through a trusted channel.'):
+        page = page.replace(text_label, translated_text(text_label))
+    page = page.replace('Keep <code>server-key.pem</code> private and backed up. The address must be reachable from the phone.',
+                        translated_text('Keep server-key.pem private and backed up. The address must be reachable from the phone.'))
+    pairing_html = localize_page(page).encode("utf-8")
     atomic_write(directory / "pairing.html", pairing_html)
     if export_directory is not None:
         for filename, contents in (("pairing.json", pairing_json), ("pairing.png", pairing_png),

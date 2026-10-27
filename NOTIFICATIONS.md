@@ -1,5 +1,7 @@
 # Android count notifications
 
+**English** | [Русский](NOTIFICATIONS.ru.md)
+
 In Carriex, open the top-left menu and choose **Settings > Notifications**. Enable checks,
 allow Android notifications, and select the saved servers to check. The default
 interval is **15 minutes**. Custom seconds, minutes, hours, and decimal values

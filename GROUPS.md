@@ -1,5 +1,7 @@
 # Groups and sender keys
 
+**English** | [Русский](GROUPS.ru.md)
+
 Update the relay and Android app together for private group history (group API
 protocol 2). One-to-one wire v3
 remains unchanged. Group envelopes use the separate Carriex sender-key format v1.

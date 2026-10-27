@@ -57,7 +57,7 @@ def test_pairing_contains_only_public_data_and_reuses_identity(tmp_path):
     cert.verify_directly_issued_by(cert)
     with Image.open(directory / "pairing.png") as image:
         assert image.width == image.height and image.width >= 300
-    assert "pairing.png" in (directory / "pairing.html").read_text()
+    assert "pairing.png" in (directory / "pairing.html").read_text(encoding="utf-8")
     generate(directory, name="Renamed server")
     assert fingerprint(bundle(directory)) == fingerprint(first)
     assert hashlib.sha256((directory / "server-key.pem").read_bytes()).digest() == key_digest
@@ -119,7 +119,10 @@ def test_html_escapes_operator_supplied_name(tmp_path):
     directory = tmp_path / "identity"
     generate(directory, name="<script>alert('name')</script>")
     page = (directory / "pairing.html").read_text("utf-8")
-    assert "<script>" not in page
+    # The shipped language control has one static script; the supplied name
+    # must remain text, never become a second executable element.
+    assert page.count("<script>") == 1
+    assert "<script>alert('name')</script>" not in page
     assert "&lt;script&gt;" in page
 
 

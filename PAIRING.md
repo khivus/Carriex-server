@@ -1,5 +1,7 @@
 # Pair a phone with your own server
 
+**English** | [Русский](PAIRING.ru.md)
+
 For the simplest step-by-step setup, start with [README.md](README.md).
 This page contains networking, identity, and advanced configuration details.
 
@@ -166,6 +168,6 @@ folder. Include both Compose files for later `logs`, `up`, and `down` commands.
 For native Linux, install `python -m pip install '.[server]'` and run
 `python -m src.pairing --address https://YOUR_REACHABLE_IP:8443`. Linux uses one
 Gunicorn worker with 100 threads. Keep one worker/replica: device registrations,
-sessions, queues, and WebSockets remain in memory. Restart loses pending messages;
-device authentication re-enrolls the same key-derived ID automatically. Internet
+sessions and live WebSockets remain process-local. Encrypted message queues persist
+in SQLite across restarts; device authentication re-enrolls the same key-derived ID automatically. Internet
 deployments still need operational rate limits and monitoring.

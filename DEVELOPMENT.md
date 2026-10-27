@@ -1,5 +1,7 @@
 # Carriex Server
 
+**English** | [Русский](DEVELOPMENT.ru.md)
+
 A Flask and Flask-Sock server that relays opaque encrypted message payloads
 over HTTP and WebSockets. It does not encrypt or decrypt payloads itself.
 

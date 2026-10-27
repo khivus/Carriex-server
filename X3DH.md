@@ -1,5 +1,7 @@
 # X3DH and Double Ratchet: wire protocol v3
 
+**English** | [Русский](X3DH.ru.md)
+
 Carriex establishes sessions with X3DH and exchanges messages using the classical
 Double Ratchet. Both phones must upgrade together. The existing v2 prekey relay
 API remains compatible; the relay handles opaque v3 envelopes without ratchet

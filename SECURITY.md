@@ -1,5 +1,7 @@
 ﻿# Security
 
+**English** | [Русский](SECURITY.ru.md)
+
 Carriex authenticates devices with P-256 challenge signatures and short-lived
 bearer sessions. The server stores public keys, never device private keys.
 Sending and inbox access are bound to the authenticated ID. See

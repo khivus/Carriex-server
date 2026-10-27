@@ -1,5 +1,7 @@
 ﻿# Device authentication (protocol v1)
 
+**English** | [Русский](AUTHENTICATION.ru.md)
+
 The app generates an ECDSA P-256 key pair inside Android Keystore. It requests
 StrongBox on Android 9+ and falls back to ordinary Android Keystore if StrongBox
 is unavailable. The private key is non-exportable; its hardware isolation depends
