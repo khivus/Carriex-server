@@ -8,7 +8,9 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ### Added
 - `.env.example` lists setting ranges, units, defaults, path rules, and validation
-  commands, including the 1-365-day statistics retention limit.
+  commands, including the 1-365-day statistics retention limit. A version header,
+  numbered category dividers, category descriptions and one-line setting notes
+  make the plain-text template easier to scan.
 - English/Russian language controls for pairing and local statistics pages.
 - Russian README and documentation companions with English comparison tools.
 - Documentation lives in `docs/`; the English README and changelog remain at the

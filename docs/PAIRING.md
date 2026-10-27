@@ -130,6 +130,20 @@ both address forms. Legacy `CARRIEX_TLS_PORT` is a listening-port override.
 Browser warnings when opening the HTTPS API are expected: the private trust is
 inside Carriex. No system/browser certificate installation is needed.
 
+## Check settings before startup
+
+Run checks from the server repository root. They preview core settings without
+starting a listener or creating identity keys; storage access and message TTL
+are also checked during actual startup. Native launchers accept `--check-config`
+as shown above. With Docker, use the same configured `.env`:
+
+```sh
+docker compose run --rm --no-deps server python -m src.pairing --data-dir /var/lib/carriex --port 8443 --check-config
+```
+
+The example settings file groups each category's explanation above its settings,
+with a one-line description and limits beside every value.
+
 ## Docker / Linux
 
 The standalone paired Compose file terminates TLS directly and uses a persistent
