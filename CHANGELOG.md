@@ -24,6 +24,11 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 - Docker CI verifies the configured paired HTTPS server and authenticated WSS,
   including address changes and preserved identity, instead of the legacy HTTP flow.
 
+## [0.6.1] - 2026-10-27
+
+### Changed
+- Advertise support for Android app 1.11/code 12, which adds local password/fingerprint locking without changing relay protocol 3. App codes 11 and 12 remain fully compatible.
+
 ## [0.5.0] - 2026-10-22
 
 ### Added
