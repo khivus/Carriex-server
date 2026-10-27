@@ -10,6 +10,11 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 - English/Russian language controls for pairing and local statistics pages.
 - Russian README and documentation companions with English comparison tools.
 
+### Fixed
+- CI installs the Linux server dependencies needed by real TLS listener tests.
+- Docker CI verifies the configured paired HTTPS server and authenticated WSS,
+  including address changes and preserved identity, instead of the legacy HTTP flow.
+
 ## [0.5.0] - 2026-10-22
 
 ### Added

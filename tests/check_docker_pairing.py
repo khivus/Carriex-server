@@ -40,7 +40,8 @@ def main():
 
         def compose(*args, timeout=30):
             result = subprocess.run(command + list(args), cwd=ROOT, env=environment,
-                                    capture_output=True, text=True, timeout=timeout)
+                                    capture_output=True, text=True, encoding="utf-8",
+                                    errors="replace", timeout=timeout)
             if result.returncode:
                 raise RuntimeError(result.stdout + result.stderr)
             return result.stdout
@@ -49,7 +50,8 @@ def main():
         try:
             for index, port in enumerate([available_port(443), available_port()]):
                 config.write_text(f"CARRIEX_HOST=127.0.0.1\nCARRIEX_PORT={port}\n"
-                                  f"CARRIEX_SERVER_NAME='Docker check {index}'\nPAIRED_BIND=127.0.0.1\n")
+                                  f"CARRIEX_SERVER_NAME='Docker check {index}'\nPAIRED_BIND=127.0.0.1\n",
+                                  encoding="utf-8")
                 compose("up", "--build", "-d", timeout=180)
                 deadline = time.monotonic() + 30
                 while True:
@@ -75,7 +77,7 @@ def main():
                 from auth_client import authenticate, user_id
                 from test_pairing import TLSClient
                 cert_file = Path(temporary) / "public.pem"
-                cert_file.write_text(ssl.DER_cert_to_PEM_cert(base64.b64decode(data["certificate"])))
+                cert_file.write_text(ssl.DER_cert_to_PEM_cert(base64.b64decode(data["certificate"])), encoding="utf-8")
                 client = TLSClient(port, cert_file)
                 identity = user_id("docker-config-check")
                 token = authenticate(client, identity)
