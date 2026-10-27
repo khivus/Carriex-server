@@ -49,12 +49,7 @@ messages. Delivery acknowledgements remain separate from viewing.
 
 ## What runs in the background
 
-Leaving the app closes its live messaging connection and five-second inbox
-refresh. Background checks read only counts, through the saved server's pinned
-HTTPS connection. They do not retrieve ciphertext, decrypt, download history,
-publish prekeys, acknowledge messages, or generate delivery receipts. Returning
-to the app reconnects the previous active server and preserves the current page
-and drafts. Opening a pending-message notification connects its saved server.
+Switching away from Carriex keeps its authenticated socket while Android keeps the process alive, and pauses the five-second HTTP refresh. Live arrivals are decrypted, saved and acknowledged and show a private server-only notification. Returning resumes refresh without rebuilding the session. Android may reclaim the process or suspend networking; lost sockets use normal reconnection. Scheduled checks remain count-only and never download or acknowledge message bodies. Tapping a message notification opens its server.
 
 Notifications display the server name and total number of queued, unexpired
 messages. This includes message requests, group messages, and group invitations; it is not a local unread-chat count.

@@ -7,6 +7,8 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- `/health` advertises server version, protocol and an explicit supported app-code range for simple full/limited/incompatible client guidance.
+
 - `.env.example` lists setting ranges, units, defaults, path rules, and validation
   commands, including the 1-365-day statistics retention limit. A version header,
   numbered category dividers, category descriptions and one-line setting notes

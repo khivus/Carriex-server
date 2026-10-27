@@ -3,6 +3,7 @@ from flask import Blueprint, g, jsonify, request
 from src.auth import valid_user_id
 
 from src._version import __version__
+from src.compatibility import COMPATIBILITY
 
 import re
 
@@ -131,6 +132,7 @@ def health():
 
     return jsonify({
         "status": "alive",
+        "compatibility": COMPATIBILITY,
         "version": __version__,
         "websocket_users": connected_users,
         "websocket_clients": connected_clients,
