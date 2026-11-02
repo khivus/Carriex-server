@@ -1,2 +1,3 @@
 # Dependencies are defined in pyproject.toml.
+-r requirements.lock
 -e .[dev,server]

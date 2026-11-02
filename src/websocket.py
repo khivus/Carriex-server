@@ -1,10 +1,15 @@
 import json
 import re
 import time
+from threading import Lock
+import secrets
 
-from flask import g
+from flask import Response, current_app, g, request
 
 from src.auth import valid_user_id
+from src.auth import store as auth_store
+from src.security import checked_json, throttled
+from src.socket_limits import BoundedServer
 
 from src.store import (
     acknowledge_messages,
@@ -15,14 +20,49 @@ from src.store import (
 )
 
 
-def register_websocket(sock):
-    """Register WebSocket routes on the Flask-Sock instance."""
+def register_websocket(app):
+    """Reserve admission atomically before accepting the WebSocket upgrade."""
+    slots, lock = {}, Lock()
 
-    @sock.route("/ws/<user_id>")
-    def websocket(ws, user_id):
+    @app.before_request
+    def admit_socket():
+        if request.endpoint != "websocket" or not hasattr(g, "user_id"):
+            return None
+        source = request.remote_addr or "unknown"
+        with lock:
+            if (len(slots) >= app.config["WS_GLOBAL_LIMIT"] or
+                sum(owner == g.user_id for owner, _ in slots.values()) >= app.config["WS_DEVICE_LIMIT"] or
+                sum(address == source for _, address in slots.values()) >= app.config["WS_IP_LIMIT"]):
+                return throttled(5, "WebSocket connection capacity reached; retry later")
+            g.socket_slot = secrets.token_hex(16)
+            slots[g.socket_slot] = (g.user_id, source)
+
+    @app.teardown_request
+    def release_socket(_error):
+        slot = getattr(g, "socket_slot", None)
+        if slot:
+            with lock:
+                slots.pop(slot, None)
+
+    class SocketResponse(Response):
+        def __init__(self, mode):
+            super().__init__()
+            self.mode = mode
+
+        def __call__(self, *args, **kwargs):
+            if self.mode == "gunicorn":
+                raise StopIteration()
+            if self.mode == "werkzeug":
+                return super().__call__(*args, **kwargs)
+            return []
+
+    @app.route("/ws/<user_id>", websocket=True)
+    def websocket(user_id):
         # Authentication and path ownership were checked before the upgrade.
+        ws = BoundedServer(request.environ, app.config, **app.config["SOCK_SERVER_OPTIONS"])
         user_id = g.user_id
         ws.auth_expires_at = g.auth_expires_at
+        ws.auth_header = request.headers.get("Authorization", "")
         add_websocket(user_id, ws)
 
         try:
@@ -38,14 +78,17 @@ def register_websocket(sock):
                     }))
                 except Exception:
                     # Messages remain queued until the recipient acknowledges them.
-                    return
+                    return SocketResponse(ws.mode)
 
             while True:
                 remaining = ws.auth_expires_at - time.monotonic()
                 if remaining <= 0:
                     ws.close(reason=1008, message="Authentication expired")
                     break
-                data = ws.receive(timeout=remaining)
+                if auth_store().session(ws.auth_header) is None:
+                    ws.close(reason=1008, message="Authentication revoked")
+                    break
+                data = ws.receive(timeout=min(remaining, 1))
 
                 if data is None:
                     continue
@@ -62,7 +105,7 @@ def register_websocket(sock):
                     continue
 
                 try:
-                    data = json.loads(data)
+                    data = checked_json(data)
                 except (TypeError, ValueError):
                     ws.send(json.dumps({
                         "type": "error",
@@ -147,3 +190,8 @@ def register_websocket(sock):
 
         finally:
             remove_websocket(user_id, ws)
+            try:
+                ws.close()
+            except Exception:
+                pass
+        return SocketResponse(ws.mode)

@@ -1,8 +1,14 @@
 """Create a persistent TLS identity and an offline QR/text pairing bundle.
 
 Run: python -m src.pairing --address https://192.168.1.20:8443 --name Home
-Windows uses the threaded development server; Linux uses single-worker Gunicorn.
+All supported systems use the same bounded production listener.
 """
+if __name__ == "__main__":
+    try:
+        from gevent import monkey
+        monkey.patch_all()
+    except ImportError:
+        pass  # Public pairing export alone does not require the server extra.
 import argparse
 import base64
 import csv
@@ -15,7 +21,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import ssl
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -290,18 +295,12 @@ def main(argv=None):
         if config.get("CARRIEX_MESSAGE_TTL_SECONDS"):
             os.environ["CARRIEX_MESSAGE_TTL_SECONDS"] = config["CARRIEX_MESSAGE_TTL_SECONDS"]
         cert, key = str(directory / "server-cert.pem"), str(directory / "server-key.pem")
-        if os.name != "nt":
-            binding = f"[{bind}]:{listen_port}" if ":" in bind else f"{bind}:{listen_port}"
-            os.execv(sys.executable, [sys.executable, "-m", "gunicorn", "--bind", binding,
-                                     "--workers", "1", "--worker-class", "gthread", "--threads", "100",
-                                     "--certfile", cert, "--keyfile", key, "src.app:app"])
-        else:
-            from src.app import create_app
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            context.minimum_version = ssl.TLSVersion.TLSv1_2
-            context.load_cert_chain(cert, key)
-            create_app().run(host=bind, port=listen_port, ssl_context=context,
-                             threaded=True, debug=False, use_reloader=False)
+        for config_key, value in config.items():
+            if config_key not in {"CARRIEX_TRUST_PROXY", "CARRIEX_ALLOW_INSECURE_HTTP", "CARRIEX_AUTH_ORIGIN"}:
+                os.environ[config_key] = value
+        from src.production import serve
+        from src.app import app
+        serve(app, bind, listen_port, cert, key)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         parser.exit(1, f"Unable to start paired server: {exc}\n")
 

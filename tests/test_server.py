@@ -30,7 +30,7 @@ from websocket import WebSocketTimeoutException
 class TestHTTPBasicFunctionality:
 
     def test_health_check(self, client):
-        response = client.get("/health")
+        response = client.get("/diagnostics")
 
         assert response.status_code == 200
 
@@ -429,7 +429,7 @@ class TestWebSocketConnection:
     ):
         ws = websocket(user_id("alice"))
 
-        data = client.get("/health").json()
+        data = client.get("/diagnostics").json()
 
         assert data["status"] == "alive"
         assert data["websocket_users"] == 1

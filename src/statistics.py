@@ -84,7 +84,7 @@ def register_statistics(app):
 
     @app.after_request
     def finish_measurement(response):
-        if hasattr(g, "statistics_started") and not request.environ.get("wsgi.websocket") and not request.path.startswith("/ws/"):
+        if hasattr(g, "statistics_started") and hasattr(g, "user_id") and not getattr(g, "rate_limited", False) and not request.path.startswith("/ws/"):
             # Endpoint names come from the route registry, never from a URL/ID.
             endpoint = request.endpoint or "unknown"
             method = request.method if request.method in {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"} else "OTHER"

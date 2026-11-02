@@ -12,6 +12,8 @@ from flask import Blueprint, current_app, g, jsonify, request
 
 from src.auth import decode_base64, valid_user_id
 from src.store import store
+from src.security import budget, throttled
+from src.security_db import durable_budget
 
 api = Blueprint("prekeys", __name__)
 
@@ -133,8 +135,17 @@ def claim(peer):
     if not valid_user_id(peer) or peer == g.user_id:
         return jsonify(error="Invalid peer"), 400
     now = int(time.time())
+    retry = budget("prekey-source", request.remote_addr or "unknown", 120)
+    if retry:
+        return throttled(retry)
     with store().connect() as db:
         db.execute("BEGIN IMMEDIATE")
+        policy = db.execute("SELECT contacts,blocked FROM inbox_policy WHERE owner=?", (peer,)).fetchone()
+        if policy and g.user_id in json.loads(policy[1]):
+            return jsonify(error="Contact is not accepting key requests from this device"), 403
+        known = policy is not None and g.user_id in json.loads(policy[0])
+        if not known:
+            known = db.execute("SELECT 1 FROM group_access a JOIN group_access b ON b.group_id=a.group_id WHERE a.owner=? AND b.owner=? AND a.invited=0 AND b.invited=0 AND a.last_revision IS NULL AND b.last_revision IS NULL LIMIT 1", (peer, g.user_id)).fetchone() is not None
         row = db.execute("SELECT bundle FROM prekey_bundles WHERE owner=?", (peer,)).fetchone()
         if row is None:
             return jsonify(error="Contact has not published X3DH keys; update and connect their app first"), 404
@@ -150,9 +161,14 @@ def claim(peer):
             db.execute("INSERT INTO prekey_claim_limits(name,minute,count) VALUES (?,?,1) ON CONFLICT(name,minute) DO UPDATE SET count=count+1",
                        (name, now // 60))
         bundle = json.loads(row[0])
+        available = db.execute("SELECT count(*) FROM one_time_prekeys WHERE owner=? AND claimed=0 AND expires_at>?", (peer, now)).fetchone()[0]
+        if available and policy and not known and available <= 9:
+            return jsonify(error="Contact must replenish one-time keys before accepting new requests"), 429
         key = db.execute("SELECT id,public_key FROM one_time_prekeys WHERE owner=? AND claimed=0 AND expires_at>? ORDER BY rowid LIMIT 1", (peer, now)).fetchone()
         bundle["one_time_prekey"] = None
         if key:
+            if not durable_budget(db, "prekey-pair:" + peer + ":" + g.user_id, 120 if known else 8):
+                return jsonify(error="Key requests for this contact are temporarily limited"), 429
             db.execute("DELETE FROM one_time_prekeys WHERE owner=? AND id=?", (peer, key[0]))
             bundle["one_time_prekey"] = {"id": key[0], "key": key[1]}
         store().statistics.record(db, "prekeys.claimed" if key else "prekeys.claims_without_opk")

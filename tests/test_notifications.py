@@ -99,6 +99,7 @@ def test_expired_tokens_and_messages_are_excluded(server_factory):
     running = server_factory(NOTIFICATION_TOKEN_TTL=2, MESSAGE_TTL_SECONDS=2)
     client = HTTPClient(running.port)
     owner, sender = user_id('expiry-count'), user_id('expiry-sender')
+    headers(client, owner)
     send(client, sender, owner, 5)
     auth = credential(client, owner)
     assert count(client, owner, auth)['pending_count'] == 1

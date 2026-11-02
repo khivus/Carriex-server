@@ -43,7 +43,10 @@ def send_message():
     except MessageTooLargeError as exc:
         return jsonify(error=str(exc)), 413
     except OverflowError as exc:
-        return jsonify(error=str(exc)), 429
+        response = jsonify(error=str(exc), code="queue_or_rate_limit", retry_after=30)
+        response.status_code = 429
+        response.headers["Retry-After"] = "30"
+        return response
     except ValueError as exc:
         return jsonify(error=str(exc)), 409
 
@@ -62,7 +65,8 @@ def get_messages(user_id):
     if not after.isascii() or not after.isdigit() or len(after) > 18:
         return jsonify(error="Invalid inbox cursor"), 400
     messages = store().inbox(user_id, int(after))
-
+    if messages and store().has_more(user_id, messages[-1]["cursor"]):
+        return jsonify(messages=messages, next_cursor=messages[-1]["cursor"]), 200
     return jsonify({"messages": messages}), 200
 
 
@@ -124,6 +128,12 @@ def read_messages(user_id):
 @api.route("/health", methods=["GET"])
 def health():
     """GET /health"""
+    return jsonify(status="alive", compatibility=COMPATIBILITY, version=__version__), 200
+
+
+@api.get("/diagnostics")
+def diagnostics():
+    """Activity counts require a full authenticated device session."""
     with store_lock:
         connected_users = len(websocket_connections)
         connected_clients = sum(

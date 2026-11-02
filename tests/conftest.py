@@ -1,6 +1,7 @@
 ﻿"""Integration fixtures using a real, isolated localhost server per test."""
 import http.client
 import json as json_module
+import os
 from pathlib import Path
 import socket
 import subprocess
@@ -10,7 +11,7 @@ from urllib.parse import quote
 
 import pytest
 import websocket as websocket_client
-from auth_client import authenticate, user_id
+from auth_client import authenticate, owns_identity, user_id
 
 
 class HTTPResponse:
@@ -50,6 +51,9 @@ class HTTPClient:
     def put(self, path, **kwargs):
         return self.request("PUT", path, **kwargs)
 
+    def delete(self, path, **kwargs):
+        return self.request("DELETE", path, **kwargs)
+
 
 @pytest.fixture
 def server_factory(tmp_path):
@@ -62,6 +66,7 @@ def server_factory(tmp_path):
                 sock.bind(("127.0.0.1", 0))
                 self.port = sock.getsockname()[1]
             self.config = {"ALLOW_INSECURE_HTTP": True,
+                           "RATE_LIMIT_ENABLED": False,
                            "MESSAGE_DATA_DIR": str(tmp_path / f"data-{self.port}"), **config}
             self.process = None
             self.log_path = tmp_path / f"server-{self.port}.log"
@@ -75,6 +80,7 @@ def server_factory(tmp_path):
                  "port=int(sys.argv[2]), threaded=True, use_reloader=False)",
                  json_module.dumps(self.config), str(self.port)],
                 cwd=Path(__file__).resolve().parents[1], stdout=self.log, stderr=subprocess.STDOUT,
+                env={**os.environ, "CARRIEX_DATA_DIR": self.config["MESSAGE_DATA_DIR"]},
             )
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline and self.process.poll() is None:
@@ -137,12 +143,14 @@ def client(server_port, sessions):
     class AuthenticatedClient(HTTPClient):
         def request(self, method, path, *, json=None, data=None, headers=None):
             headers = dict(headers or {})
-            if path == "/send" or path.startswith("/messages/"):
+            if path in {"/send", "/diagnostics"} or path.startswith("/messages/"):
                 identity = user_id("alice")
                 if path.startswith("/messages/"):
                     identity = path.removeprefix("/messages/").split("/", 1)[0]
                 elif isinstance(json, dict) and json.get("sender"):
                     identity = json["sender"]
+                    if owns_identity(json.get("recipient")):
+                        sessions(json["recipient"])
                 headers.setdefault("Authorization", "Bearer " + sessions(identity))
             return super().request(method, path, json=json, data=data, headers=headers)
 
@@ -152,6 +160,11 @@ def client(server_port, sessions):
 @pytest.fixture
 def websocket(server_port, sessions):
     connections = []
+    monitor = user_id("socket-monitor")
+    # Transport examples use established identities, including offline Bob.
+    # Enrollment is independent of maintaining a live WebSocket connection.
+    sessions(user_id("alice"))
+    sessions(user_id("bob"))
 
     def connect(user_id):
         ws = websocket_client.create_connection(
@@ -163,7 +176,7 @@ def websocket(server_port, sessions):
         # Wait for registration without consuming queued messages from the socket.
         deadline = time.monotonic() + 2
         while time.monotonic() < deadline:
-            count = HTTPClient(server_port).get("/health").json()["websocket_clients"]
+            count = HTTPClient(server_port).get("/diagnostics", headers={"Authorization": "Bearer " + sessions(monitor)}).json()["websocket_clients"]
             if count == sum(connection.connected for connection in connections):
                 return ws
             time.sleep(0.01)

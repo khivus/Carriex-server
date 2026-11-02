@@ -56,7 +56,8 @@ def test_collection_counts_unique_delivery_and_prekeys_and_survives_restart(serv
         assert total(data, metric) == value, metric
     assert data["metrics"]["messages.ack_delay_ms"]["samples"] == 1
     assert data["metrics"]["messages.ack_delay_ms"]["mean"] >= 0
-    assert data["metrics"]["http.POST.api.send_message.4xx_ms"]["samples"] == 2
+    # Unauthenticated traffic no longer triggers a SQLite statistics write.
+    assert data["metrics"]["http.POST.api.send_message.4xx_ms"]["samples"] == 1
     for private in (sender, recipient, message["id"], message["ciphertext"], upload["identity_key"], sending["Authorization"]):
         assert private not in json.dumps(data)
     rows = list(csv.DictReader(io.StringIO(cli(directory, "export", "--format", "csv"))))

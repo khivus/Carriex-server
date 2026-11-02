@@ -3,7 +3,7 @@ import pytest
 
 class TestHTTPBasicFunctionality:
     def test_health_check(self, client):
-        response = client.get("/health")
+        response = client.get("/diagnostics")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "alive"

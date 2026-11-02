@@ -8,10 +8,12 @@ import time
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 
 from src.auth import valid_user_id
 from src.store import send_event, store
+from src.security_db import activity, durable_budget
+from src.usage import initialize_groups, object_usage
 
 api = Blueprint("groups", __name__)
 FIELDS = {"version", "id", "revision", "epoch", "previous", "admin", "name", "members",
@@ -181,18 +183,37 @@ def change_state():
         transition(old, s)
         before = set(old["members"] + old["invited"]) if old else set()
         after = set(s["members"] + s["invited"])
-        for owner in after - before:
-            if db.execute("SELECT count(*) FROM group_access WHERE owner=?", (owner,)).fetchone()[0] >= 64:
+        old_members = set(old["members"]) if old else set()
+        for owner in set(s["members"]) - old_members:
+            if db.execute("SELECT count(*) FROM group_access WHERE owner=? AND invited=0 AND last_revision IS NULL", (owner,)).fetchone()[0] >= 64:
                 raise GroupError("A device can participate in at most 64 groups", 429)
+        for owner in set(s["invited"]) - (set(old["invited"]) if old else set()):
+            policy = db.execute("SELECT contacts,blocked FROM inbox_policy WHERE owner=?", (owner,)).fetchone()
+            if policy and s["admin"] in json.loads(policy[1]):
+                raise GroupError("Recipient is not accepting invitations from this device", 403)
+            pending = db.execute("SELECT count(*) FROM group_access WHERE owner=? AND invited=1 AND last_revision IS NULL", (owner,)).fetchone()[0]
+            if pending >= current_app.config["GROUP_INVITATION_LIMIT"]:
+                raise GroupError("Recipient has too many pending group invitations", 429)
+            if not policy or s["admin"] not in json.loads(policy[0]):
+                same_admin = db.execute("SELECT count(*) FROM group_access a JOIN groups g ON g.id=a.group_id WHERE a.owner=? AND a.invited=1 AND a.last_revision IS NULL AND json_extract(g.body,'$.admin')=?", (owner, s["admin"])).fetchone()[0]
+                if same_admin >= 2:
+                    raise GroupError("Wait for the recipient to review your group invitations", 429)
+            if not durable_budget(db, "invitations:sender:" + s["admin"], current_app.config["GROUP_INVITATIONS_HOURLY"]) or not durable_budget(db, "invitations:recipient:" + owner, 120):
+                raise GroupError("Group invitation rate exceeded; retry later", 429)
+        if not old and db.execute("SELECT count(*) FROM groups WHERE json_extract(body,'$.admin')=?", (s["admin"],)).fetchone()[0] >= current_app.config["GROUPS_PER_ADMIN"]:
+            raise GroupError("Your group history capacity is full; contact the server owner", 429)
         if not old and db.execute("SELECT count(*) FROM groups").fetchone()[0] >= 4096:
             raise GroupError("Group capacity reached", 429)
-        count, size = db.execute("SELECT count(*),coalesce(sum(length(body)),0) FROM group_events").fetchone()
-        if count >= 50000 or size > 64 * 1024 * 1024:
+        releasing = s["action"] in {"close", "leave", "decline", "remove"}
+        own_count, _ = object_usage(db, "group_events", s["admin"])
+        if not releasing and own_count >= current_app.config["GROUP_EVENTS_PER_ADMIN"]:
+            raise GroupError("Your group membership history capacity reached its limit", 429)
+        count, size = object_usage(db, "group_events")
+        if not releasing and (count >= 50000 or size > 64 * 1024 * 1024):
             raise GroupError("Group membership storage capacity reached", 429)
         body = json.dumps(s, separators=(",", ":"))
         db.execute("INSERT INTO groups VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,body=excluded.body", (s["id"], s["revision"], body))
         db.execute("INSERT INTO group_events VALUES (?,?,?)", (s["id"], s["revision"], body))
-        old_members = set(old["members"]) if old else set()
         for owner in set(s["members"]) - old_members:
             db.execute("INSERT INTO group_periods VALUES (?,?,?,NULL)", (s["id"], owner, s["revision"]))
         for owner in old_members - set(s["members"]):
@@ -210,6 +231,7 @@ def change_state():
             # only through the message retention window. They never authorize sending.
             db.execute("UPDATE group_keys SET expires=? WHERE group_id=? AND expires=0", (int(time.time()) + store().ttl_seconds, s["id"]))
         if s["closed"]:
+            activity(db, "closed-group", s["id"])
             for table in ("group_keys", "group_deliveries", "group_messages"):
                 db.execute(f"DELETE FROM {table} WHERE group_id=?", (s["id"],))
     for owner in before | after:
@@ -346,9 +368,12 @@ def sender_keys(group_id):
                 raise GroupError("A published sender-key distribution is immutable within its epoch", 409)
             if old is None:
                 additions.append(packet)
-        count, size = db.execute("SELECT count(*),coalesce(sum(length(wire)),0) FROM group_keys").fetchone()
+        count, size = object_usage(db, "group_keys")
         if count + len(additions) > 100000 or size + sum(len(p["wire"]) for p in additions) > 128 * 1024 * 1024:
             raise GroupError("Sender-key packet storage capacity reached", 429)
+        _, own_size = object_usage(db, "group_keys", g.user_id)
+        if own_size + sum(len(p["wire"]) for p in additions) > current_app.config["SENDER_STORAGE_BYTES"]:
+            raise GroupError("Your sender-key storage capacity reached its limit", 429)
         for packet in additions:
             db.execute("INSERT OR IGNORE INTO group_keys(group_id,epoch,sender,recipient,id,wire) VALUES (?,?,?,?,?,?)", (group_id, s["epoch"], g.user_id, packet["recipient"], packet["id"], packet["wire"]))
     for owner in s["members"]:
@@ -383,9 +408,12 @@ def messages(group_id):
             if tuple(existing) != (g.user_id, s["epoch"], digest):
                 raise GroupError("Group message ID already has different content", 409)
             return jsonify(status="ok")
-        count, size = db.execute("SELECT count(*),coalesce(sum(length(wire)),0) FROM group_messages").fetchone()
+        count, size = object_usage(db, "group_messages")
         if count >= 25000 or size + len(body["wire"]) > 128 * 1024 * 1024:
             raise GroupError("Group message storage capacity reached", 429)
+        own_rows, own_size = object_usage(db, "group_messages", g.user_id)
+        if own_rows >= 10000 or own_size + len(body["wire"]) > current_app.config["SENDER_STORAGE_BYTES"]:
+            raise GroupError("Your group message storage capacity reached its limit", 429)
         if db.execute("SELECT count(*) FROM group_messages WHERE group_id=? AND wire!=''", (group_id,)).fetchone()[0] >= 1000:
             raise GroupError("Group message queue is full", 429)
         expires = int(time.time()) + relay.ttl_seconds
@@ -461,6 +489,8 @@ def register_groups(app):
                 db.execute("UPDATE group_messages SET digest=? WHERE group_id=? AND id=?", (hashlib.sha256(row[2].encode("ascii")).hexdigest(), row[0], row[1]))
         db.execute("CREATE INDEX IF NOT EXISTS group_key_expiry ON group_keys(expires)")
         db.execute("CREATE INDEX IF NOT EXISTS group_message_expiry ON group_messages(expires)")
+        db.execute("CREATE INDEX IF NOT EXISTS group_admin ON groups(json_extract(body,'$.admin'))")
+        initialize_groups(db)
     app.register_blueprint(api)
 
     @app.after_request

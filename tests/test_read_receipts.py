@@ -7,6 +7,7 @@ from test_persistence import authorized
 
 
 def send(client, message_id, sender="alice", recipient="bob"):
+    authorized(client, recipient)
     assert client.post("/send", json={"id": message_id, "sender": user_id(sender),
                                      "recipient": user_id(recipient), "ciphertext": "opaque"},
                        headers=authorized(client, sender)).status_code == 201

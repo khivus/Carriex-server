@@ -13,6 +13,7 @@ def test_queue_survives_restart_and_ack_retires_ciphertext(server_factory, tmp_p
     alice, bob = user_id("alice"), user_id("bob")
     first = server_factory(MESSAGE_DATA_DIR=data_dir)
     client = HTTPClient(first.port)
+    authorized(client, "bob")  # Offline delivery requires prior enrollment.
     sent = client.post("/send", json={"id": "a" * 32, "sender": alice, "recipient": bob,
                                      "ciphertext": "opaque"}, headers=authorized(client, "alice"))
     assert sent.status_code == 201
@@ -34,6 +35,7 @@ def test_queue_survives_restart_and_ack_retires_ciphertext(server_factory, tmp_p
 def test_retry_is_idempotent_and_conflicting_content_is_rejected(raw_client):
     alice, bob = user_id("alice"), user_id("bob")
     headers = authorized(raw_client, "alice")
+    authorized(raw_client, "bob")
     payload = {"id": "b" * 32, "sender": alice, "recipient": bob, "ciphertext": "same"}
     assert raw_client.post("/send", json=payload, headers=headers).status_code == 201
     assert raw_client.post("/send", json=payload, headers=headers).status_code == 201
@@ -62,6 +64,7 @@ def test_expired_message_is_not_delivered(server_factory):
     server = server_factory(MESSAGE_TTL_SECONDS=1)
     client = HTTPClient(server.port)
     alice, bob = user_id("alice"), user_id("bob")
+    authorized(client, "bob")
     assert client.post("/send", json={"sender": alice, "recipient": bob, "ciphertext": "expired"},
                        headers=authorized(client, "alice")).status_code == 201
     import time

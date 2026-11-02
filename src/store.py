@@ -10,6 +10,8 @@ from threading import Lock
 
 from flask import current_app
 from src.statistics import RelayStatistics, record
+from src.usage import initialize as initialize_usage, usage
+from src.security_db import initialize as initialize_security
 
 
 websocket_connections = {}
@@ -21,10 +23,13 @@ class MessageTooLargeError(ValueError):
 
 
 class MessageStore:
-    def __init__(self, path, ttl_seconds=30 * 24 * 3600, statistics=None):
+    def __init__(self, path, ttl_seconds=30 * 24 * 3600, statistics=None, maximum_database_bytes=1024 * 1024 * 1024):
         self.path = str(path)
         self.ttl_seconds = int(ttl_seconds)
         self.statistics = statistics or RelayStatistics()
+        self.maximum_database_bytes = int(maximum_database_bytes)
+        if self.maximum_database_bytes < 16 * 1024 * 1024:
+            raise ValueError("Maximum database size must be at least 16 MiB")
         if self.ttl_seconds <= 0:
             raise ValueError("MESSAGE_TTL_SECONDS must be positive")
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -49,6 +54,10 @@ class MessageStore:
             db.execute("CREATE INDEX IF NOT EXISTS outbox ON messages(sender, expires_at)")
             db.execute("CREATE TABLE IF NOT EXISTS inbox_policy (owner TEXT PRIMARY KEY, contacts TEXT NOT NULL, blocked TEXT NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS quarantined_ids (id TEXT PRIMARY KEY)")
+            db.execute("CREATE INDEX IF NOT EXISTS message_expiry ON messages(expires_at)")
+            db.execute("CREATE INDEX IF NOT EXISTS sender_inbox ON messages(recipient,sender,state)")
+            initialize_usage(db)
+            initialize_security(db)
             self.statistics.initialize(db)
 
     @contextmanager
@@ -56,21 +65,26 @@ class MessageStore:
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
         try:
+            page_size = db.execute("PRAGMA page_size").fetchone()[0]
+            pages = max(db.execute("PRAGMA page_count").fetchone()[0], self.maximum_database_bytes // page_size)
+            db.execute(f"PRAGMA max_page_count={pages}")
+            db.execute("PRAGMA journal_size_limit=16777216")
             with db:
                 yield db
         finally:
             db.close()
 
     def prune(self, db):
+        now = time.time()
         if self.statistics.enabled:
-            count = db.execute("SELECT count(*) FROM messages WHERE expires_at<=? AND state='queued'", (int(time.time()),)).fetchone()[0]
+            count = db.execute("SELECT count(*) FROM messages WHERE expires_at<=? AND state='queued'", (now,)).fetchone()[0]
             self.statistics.record(db, "messages.expired", count, count)
-        db.execute("DELETE FROM messages WHERE expires_at <= ?", (int(time.time()),))
+        db.execute("DELETE FROM messages WHERE expires_at <= ?", (now,))
         db.execute("DELETE FROM quarantined_ids WHERE NOT EXISTS (SELECT 1 FROM messages WHERE messages.id=quarantined_ids.id)")
 
     def enqueue(self, sender, recipient, ciphertext, message_id=None):
         message_id = message_id or uuid.uuid4().hex
-        now = int(time.time())
+        now = time.time()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             self.prune(db)
@@ -89,21 +103,28 @@ class MessageStore:
                 size = len(ciphertext.encode("utf-8"))
                 if size > 256 * 1024:
                     raise MessageTooLargeError("Encrypted message exceeds 256 KiB")
-                total, stored_bytes = db.execute("SELECT count(*),coalesce(sum(length(CAST(ciphertext AS BLOB))),0) FROM messages").fetchone()
+                device = db.execute("SELECT revoked FROM relay_devices WHERE owner=?", (recipient,)).fetchone()
+                if device is None or device[0]:
+                    raise ValueError("Recipient has not connected to this server or is not accepting messages")
+                total, _, stored_bytes = usage(db, "all")
                 if total >= 50000 or stored_bytes + size > 128 * 1024 * 1024:
                     raise OverflowError("Server message storage capacity reached")
-                recipient_bytes = db.execute("SELECT coalesce(sum(length(CAST(ciphertext AS BLOB))),0) FROM messages WHERE recipient=?", (recipient,)).fetchone()[0]
+                sender_rows, sender_pending, sender_bytes = usage(db, "sender:" + sender)
+                if sender_pending >= current_app.config["SENDER_PENDING_LIMIT"] or sender_rows >= 10000 or sender_bytes + size > current_app.config["SENDER_STORAGE_BYTES"]:
+                    raise OverflowError("Your server queue is full; pending messages must be collected before sending more")
+                _, count, recipient_bytes = usage(db, "recipient:" + recipient)
                 if recipient_bytes + size > 16 * 1024 * 1024:
                     raise OverflowError("Recipient storage capacity reached")
                 if policy:
                     sender_count = db.execute("SELECT count(*) FROM messages WHERE recipient=? AND sender=? AND state='queued'", (recipient, sender)).fetchone()[0]
-                    if sender_count >= (64 if sender in contacts else 2):
-                        raise OverflowError("Pending messages from this sender reached their limit")
+                    # Accepted contacts share the normal inbox capacity. The old
+                    # 64-packet ceiling could strand ordinary offline chats.
+                    if sender not in contacts and sender_count >= 2:
+                        raise OverflowError("Message request is waiting for the recipient to accept or reconnect")
                     if sender not in contacts:
                         unknown = db.execute("SELECT sender FROM messages WHERE recipient=? AND state='queued'", (recipient,)).fetchall()
                         if sum(row[0] not in contacts for row in unknown) >= 32:
                             raise OverflowError("Message request queue is full")
-                count = db.execute("SELECT count(*) FROM messages WHERE recipient=? AND state='queued'", (recipient,)).fetchone()[0]
                 if count >= 1000:
                     raise OverflowError("Recipient queue is full")
                 db.execute("UPDATE message_sequence SET value=value+1 WHERE id=1")
@@ -125,9 +146,22 @@ class MessageStore:
 
     def inbox(self, recipient, after=0):
         with self.connect() as db:
-            self.prune(db)
-            rows = db.execute("SELECT rowid AS cursor,* FROM messages WHERE recipient=? AND state='queued' AND rowid>? ORDER BY rowid LIMIT 500", (recipient, after)).fetchall()
-            return [dict(self.payload(row), cursor=row["cursor"]) for row in rows]
+            if self.statistics.enabled:
+                self.prune(db)
+            rows = db.execute("SELECT rowid AS cursor,* FROM messages WHERE recipient=? AND state='queued' AND rowid>? AND expires_at>? ORDER BY rowid LIMIT 500", (recipient, after, time.time()))
+            result, size = [], 0
+            for row in rows:
+                item = dict(self.payload(row), cursor=row["cursor"])
+                encoded_size = len(json.dumps(item).encode("utf-8"))
+                if result and size + encoded_size > 1024 * 1024:
+                    break
+                result.append(item)
+                size += encoded_size
+            return result
+
+    def has_more(self, recipient, after):
+        with self.connect() as db:
+            return db.execute("SELECT 1 FROM messages WHERE recipient=? AND state='queued' AND rowid>? AND expires_at>? LIMIT 1", (recipient, after, time.time())).fetchone() is not None
 
     def pending_count(self, recipient):
         # Covered entirely by the small index; no ciphertext is loaded, no queue
@@ -135,7 +169,7 @@ class MessageStore:
         with self.connect() as db:
             row = db.execute("""SELECT count(*) AS pending_count,coalesce(max(arrival),0) AS revision
                 FROM messages INDEXED BY inbox_counts
-                WHERE recipient=? AND state='queued' AND expires_at>?""", (recipient, int(time.time()))).fetchone()
+                WHERE recipient=? AND state='queued' AND expires_at>?""", (recipient, time.time())).fetchone()
             return dict(row)
 
     def policy(self, owner, contacts, blocked):
@@ -203,8 +237,7 @@ class MessageStore:
 
     def statuses(self, sender):
         with self.connect() as db:
-            self.prune(db)
-            rows = db.execute("SELECT id, state, receipt_visible, viewed FROM messages WHERE sender=? ORDER BY rowid LIMIT 500", (sender,)).fetchall()
+            rows = db.execute("SELECT id, state, receipt_visible, viewed FROM messages WHERE sender=? AND expires_at>? ORDER BY rowid LIMIT 500", (sender, time.time())).fetchall()
             return [{"id": row["id"], "state": ("read" if row["viewed"] else row["state"]) if row["receipt_visible"] else "sent"}
                     for row in rows]
 
@@ -240,6 +273,9 @@ def send_event(recipient, event):
         try:
             if time.monotonic() >= ws.auth_expires_at:
                 raise TimeoutError("Session expired")
+            from src.auth import store as auth_store
+            if auth_store().session(ws.auth_header) is None:
+                raise TimeoutError("Session revoked")
             ws.send(json.dumps(event))
             handed_to_socket = True
         except Exception:
@@ -248,6 +284,11 @@ def send_event(recipient, event):
 
 
 def route_message(sender, recipient, ciphertext, message_id=None):
+    from src.security import budget
+    from flask import request
+    for name, subject in (("SEND_DEVICE_RATE", sender), ("SEND_IP_RATE", request.remote_addr or "unknown")):
+        if budget(name, subject, current_app.config[name]):
+            raise OverflowError("Message sending rate exceeded; retry shortly")
     try:
         message, queued_count, new = store().enqueue(sender, recipient, ciphertext, message_id)
     except (ValueError, OverflowError) as exc:

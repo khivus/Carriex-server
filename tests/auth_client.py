@@ -11,6 +11,10 @@ _keys = {}
 _audiences = {}
 
 
+def owns_identity(identity):
+    return isinstance(identity, str) and identity in _keys
+
+
 def remember_challenge(payload):
     _audiences[payload["challenge"]] = payload["audience"]
     return payload["challenge"]

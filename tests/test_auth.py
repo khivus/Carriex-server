@@ -110,7 +110,7 @@ def test_websocket_cannot_subscribe_as_another_device(raw_client, server_port):
         websocket.create_connection(f"ws://127.0.0.1:{server_port}/ws/{user_id('bob')}",
                                     header=headers(token), timeout=2)
     assert failure.value.status_code == 403
-    assert raw_client.get("/health").json()["websocket_clients"] == 0
+    assert raw_client.get("/diagnostics", headers=headers(token)).json()["websocket_clients"] == 0
 
 
 def test_websocket_sender_is_verified(websocket, receive_json, client):

@@ -14,7 +14,7 @@ class TestWebSocketConnection:
 
     def test_http_health_reports_websocket_connection(self, client, websocket, receive_json):
         ws = websocket(user_id("alice"))
-        data = client.get("/health").json()
+        data = client.get("/diagnostics").json()
         assert data["status"] == "alive"
         assert data["websocket_users"] == 1
         assert data["websocket_clients"] == 1
@@ -89,7 +89,7 @@ class TestWebSocketReconnect:
         bob = websocket(user_id("bob"))
         bob.close()
         deadline = time.monotonic() + 2
-        while client.get("/health").json()["websocket_clients"]:
+        while client.get("/diagnostics").json()["websocket_clients"]:
             assert time.monotonic() < deadline
             time.sleep(0.01)
         for number in range(10):
