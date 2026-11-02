@@ -83,8 +83,9 @@ Then double-click **start-server.bat**, or run:
 .\start-server.bat
 ```
 
-Leave the terminal open. Press Ctrl+C to stop. The native Windows launcher is for
-development/home testing; Docker is the preferred option for a deployed service.
+Leave the terminal open. Press Ctrl+C to stop. Windows and Docker use the same
+bounded production listener. Read [internet deployment and recovery](docs/HARDENING.md)
+before opening the port to the internet.
 
 To check settings without starting the server:
 
@@ -109,7 +110,7 @@ sh start-server.sh
 ```
 
 Press Ctrl+C to stop. Check settings with `sh start-server.sh --check-config`.
-Linux/macOS uses Gunicorn. If the OS refuses native port 443, use Docker's port
+Linux/macOS uses the same production listener. If the OS refuses native port 443, use Docker's port
 mapping or use 8443; do not run the whole app as root just to bind a port.
 
 ### Docker: Windows, Linux, or macOS

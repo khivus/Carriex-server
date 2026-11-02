@@ -7,15 +7,36 @@ services:
     environment:
       CARRIEX_ALLOW_INSECURE_HTTP: "${CARRIEX_ALLOW_INSECURE_HTTP:-0}"
       CARRIEX_TRUST_PROXY: "${CARRIEX_TRUST_PROXY:-0}"
+      CARRIEX_PROXY_NETWORKS: "${CARRIEX_PROXY_NETWORKS:-127.0.0.1/32,::1/128}"
       CARRIEX_AUTH_ORIGIN: "${CARRIEX_AUTH_ORIGIN:-}"
       CARRIEX_DATA_DIR: /var/lib/carriex
       CARRIEX_MESSAGE_TTL_SECONDS: "${CARRIEX_MESSAGE_TTL_SECONDS:-2592000}"
+      CARRIEX_REGISTRATION_MODE: "${CARRIEX_REGISTRATION_MODE:-open}"
+      CARRIEX_CONNECTION_LIMIT: "${CARRIEX_CONNECTION_LIMIT:-128}"
+      CARRIEX_CONNECTIONS_PER_IP: "${CARRIEX_CONNECTIONS_PER_IP:-32}"
+      CARRIEX_REQUEST_TIMEOUT: "${CARRIEX_REQUEST_TIMEOUT:-15}"
+      CARRIEX_MAX_DATABASE_BYTES: "${CARRIEX_MAX_DATABASE_BYTES:-1073741824}"
+      CARRIEX_WS_GLOBAL_LIMIT: "${CARRIEX_WS_GLOBAL_LIMIT:-64}"
+      CARRIEX_WS_IP_LIMIT: "${CARRIEX_WS_IP_LIMIT:-20}"
+      CARRIEX_WS_DEVICE_LIMIT: "${CARRIEX_WS_DEVICE_LIMIT:-2}"
+      CARRIEX_ENROLL_IP_HOURLY: "${CARRIEX_ENROLL_IP_HOURLY:-30}"
+      CARRIEX_ENROLL_GLOBAL_HOURLY: "${CARRIEX_ENROLL_GLOBAL_HOURLY:-120}"
+      CARRIEX_SENDER_PENDING_LIMIT: "${CARRIEX_SENDER_PENDING_LIMIT:-4000}"
+      CARRIEX_SENDER_STORAGE_BYTES: "${CARRIEX_SENDER_STORAGE_BYTES:-8388608}"
     volumes:
       - server-messages:/var/lib/carriex
     restart: unless-stopped
     init: true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    ulimits:
+      nofile: {soft: 1024, hard: 1024}
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
     read_only: true
-    tmpfs: [/tmp]
+    tmpfs: ["/tmp:size=33554432,mode=1777"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
 volumes:

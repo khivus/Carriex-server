@@ -6,6 +6,18 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Security and delivery fixes
+- Remove the 64-pending-message cap for accepted contacts while retaining request,
+  recipient and fair sender storage limits; add precise expiry and byte pagination.
+- Respect blocks for invitations/prekeys, separate pending invitations from active
+  group capacity, and preserve history when declined/left/closed groups free slots.
+- Bound requests, enrollment, sessions, WebSocket buffers/connections and writes;
+  add persisted revocation, optional local device approval and safe cleanup tools.
+- Use one production TLS/WSS listener on all platforms, validate trusted proxy
+  sources, restrict public activity diagnostics and avoid unauthenticated DB writes.
+- Lock and audit patched dependencies; bound Docker resources/logs. See
+  [internet deployment and recovery](docs/HARDENING.md).
+
 ### Added
 - `/health` advertises server version, protocol and an explicit supported app-code range for simple full/limited/incompatible client guidance.
 

@@ -2,6 +2,9 @@
 
 **English** | [Русский](STATISTICS.ru.md)
 
+Only authenticated HTTP handling is measured. Public health probes and rejected
+unauthenticated traffic do not trigger per-request SQLite statistics writes.
+
 Collection is optional and disabled by default. Enable it in `.env`, then restart
 using `start-server.bat`, `./start-server.sh` or Docker Compose:
 

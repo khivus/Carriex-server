@@ -276,3 +276,22 @@ def test_public_key_challenge_flood_from_another_source_cannot_lock_out_owner(se
     assert response.status_code == 200
     proof = response.json(); remember_challenge(proof)
     assert client.post("/auth/verify",json=dict(challenge=proof["challenge"],signature=sign(owner,proof["challenge"]))).status_code == 200
+
+
+def test_enrollment_upgrade_preserves_notification_and_signed_group_owners(server_factory):
+    running = server_factory()
+    client = HTTPClient(running.port)
+    notification_owner, group_owner, sender = [user_id(x) for x in ("legacy-notifications","legacy-group","upgrade-sender")]
+    auth = credentials(client,notification_owner)
+    token = client.post("/notifications/token",headers=auth,json={}).json()["token"]
+    assert client.post("/groups/state",headers=credentials(client,group_owner),json=create(group_owner)).status_code == 200
+    running.stop()
+    # Simulate a pre-enrollment database; retained scoped credentials and signed
+    # participation are trusted evidence of earlier device authentication.
+    with sqlite3.connect(Path(running.config["MESSAGE_DATA_DIR"])/"messages.sqlite3") as db:
+        db.execute("DROP TABLE relay_devices")
+    running.start()
+    assert client.get(f"/messages/{notification_owner}/count",headers={"Authorization":"Bearer "+token}).status_code == 200
+    tx = credentials(client,sender)
+    assert send(client,sender,notification_owner,tx).status_code == 201
+    assert send(client,sender,group_owner,tx).status_code == 201

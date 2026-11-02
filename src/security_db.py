@@ -17,9 +17,11 @@ def initialize(db):
     db.execute("CREATE TABLE IF NOT EXISTS resource_activity (kind TEXT NOT NULL,owner TEXT NOT NULL,updated REAL NOT NULL,PRIMARY KEY(kind,owner))")
     if fresh:
         now = time.time()
-        # Existing publication/policy/sender records were created by authenticated
-        # owners. Invented message recipients are deliberately not enrolled.
-        for table, field in (("prekey_bundles", "owner"), ("inbox_policy", "owner"), ("messages", "sender")):
+        # Existing publications, policies, senders, scoped credentials and signed
+        # group participation establish earlier authentication. Invented message
+        # recipients and unaccepted invitations are deliberately not enrolled.
+        for table, field in (("prekey_bundles", "owner"), ("inbox_policy", "owner"), ("messages", "sender"),
+                             ("notification_tokens", "owner"), ("group_periods", "owner")):
             if db.execute("SELECT 1 FROM sqlite_master WHERE name=?", (table,)).fetchone():
                 db.execute(f"INSERT OR IGNORE INTO relay_devices(owner,last_seen) SELECT DISTINCT {field},? FROM {table}", (now,))
 

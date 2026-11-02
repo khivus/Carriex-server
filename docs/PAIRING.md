@@ -34,9 +34,9 @@ one launch:
 
 The default listening port follows the advertised URL (443 if it has no explicit
 port), or the `CARRIEX_PORT` setting. Permit that inbound TCP port in your firewall for
-the networks you intend to serve. Keep the terminal running. This Windows launcher
-uses Flask's threaded development server with debugging disabled, suitable for
-development/testing. Use the Docker/Gunicorn option below for a deployed service.
+the networks you intend to serve. Keep the terminal running. Windows, Linux and
+Docker share a bounded production listener. See [HARDENING.md](HARDENING.md) for
+internet limits, private enrollment and recovery before forwarding the port.
 
 1. Open `.carriex-server\pairing.html` locally in your browser. The terminal prints
    its full path. It displays the QR and selectable pairing text.
@@ -63,8 +63,9 @@ the optional destination as the **public pairing export directory**.
 Only import a bundle obtained directly from the server owner through a trusted
 channel. An attacker who replaces the initial QR/text could substitute their own
 server. The displayed fingerprint lets you compare the server key with the owner.
-The bundle is public information, not an invitation password: device enrollment
-is currently open to anyone who can reach the server and prove ownership of a key.
+The bundle is public information, not an invitation password. Default open
+enrollment accepts reachable devices proving their keys. Optional `approved`
+enrollment requires local operator approval; see [HARDENING.md](HARDENING.md).
 
 ## Reaching the server from another network
 
@@ -180,8 +181,7 @@ identity stays in its separate volume. Open `pairing.html` from the configured
 folder. Include both Compose files for later `logs`, `up`, and `down` commands.
 
 For native Linux, install `python -m pip install '.[server]'` and run
-`python -m src.pairing --address https://YOUR_REACHABLE_IP:8443`. Linux uses one
-Gunicorn worker with 100 threads. Keep one worker/replica: device registrations,
-sessions and live WebSockets remain process-local. Encrypted message queues persist
-in SQLite across restarts; device authentication re-enrolls the same key-derived ID automatically. Internet
-deployments still need operational rate limits and monitoring.
+`python -m src.pairing --address https://YOUR_REACHABLE_IP:8443`. All systems use
+the same bounded gevent listener. Keep one process/replica: sessions and live
+WebSockets remain process-local. Encrypted queues and enrollment/revocation state
+persist in SQLite. See [HARDENING.md](HARDENING.md) for limits and monitoring.

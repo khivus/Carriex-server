@@ -48,7 +48,7 @@ request supplies `X-Forwarded-Proto: https`.
 
 3. `POST /auth/verify`, JSON `{"challenge":"...","signature":"<standard base64 DER ECDSA signature>"}`.
    Each challenge is consumed atomically once, including failed proofs. The server
-   verifies the signature, records the public key, and returns `user_id`, `token`,
+   verifies the signature, enrolls the device ID, and returns `user_id`, `token`,
    and `expires_in` (3600 seconds). The token contains 32 cryptographically random
    bytes, encoded as unpadded base64url.
 4. Supply `Authorization: Bearer <token>` on `/send`, `/messages/<user_id>`, and
@@ -73,21 +73,21 @@ invalidate a newer session established by another request.
 
 ## Storage and operational limits
 
-`src/auth.py` owns the in-memory registry, outstanding challenges, and sessions.
-It stores no device private key. Challenge/session entries expire; each map and
-the device registry are capped at 10,000 entries. Authentication returns HTTP 429
-when capacity is reached. Expired entries are pruned during authentication.
-Deployment-level rate limits are still needed for an internet-facing service.
-Registry capacity is intentionally bounded until persistence/admin controls exist.
+`src/auth.py` keeps only expiring challenges and hashed full sessions in memory;
+the old non-expiring public-key cache is removed. Both maps are bounded globally,
+with three pending challenges per device/source and four sessions per device by default.
+Session rotation and expiry release capacity. Durable enrollment/approval, device
+blocks and revocation versions live in SQLite. Open enrollment is rate-limited;
+`CARRIEX_REGISTRATION_MODE=approved` requires local operator approval.
 
-Use a single server worker. Restart discards the authentication registry, full
-session tokens and challenges; the same device can enroll again under the same
-key-derived ID. Encrypted message queues, prekeys, and restricted notification
-credentials persist in SQLite. A future shared registry must preserve public-key/ID bindings and
-atomic challenge consumption, and use shared session state before adding workers.
-There is no device revocation/admin account management yet. The one-hour token
-lifetime limits a stolen token's validity; private-key compromise requires a new
-identity and notifying contacts.
+Use one server process. Restart discards full sessions/challenges, while the same
+device proves its key again. Queues, public prekeys, admission/deny records and
+restricted notification credentials persist. `DELETE /auth/session` revokes the
+current full token; `DELETE /auth/sessions` revokes all this device's full sessions
+and notification credentials. Existing sockets recheck revocation. Local operator
+commands can approve/block a device or revoke its sessions without a public admin
+endpoint. See [HARDENING.md](HARDENING.md) for defaults and recovery. A stolen
+private key still requires blocking that identity and notifying contacts.
 
 TLS protects bearer tokens and the authenticated WebSocket stream. End-to-end
 message encryption remains a separate protocol. Socket send acceptance is not a

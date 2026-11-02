@@ -71,21 +71,23 @@ docker build -t carriex-server .
 docker run --rm -p 127.0.0.1:5000:5000 carriex-server
 ```
 
-The container uses one Gunicorn worker with 100 threads. Active WebSocket
-connections occupy threads, so leave capacity for HTTP requests. Do not increase
-workers or scale replicas: live connections and authentication sessions are
-process-local. Queued ciphertext, public prekeys, and restricted notification
-credentials persist in SQLite. Preserve the private data directory on restart.
+All platforms use one bounded gevent production listener with separate WebSocket
+admission and HTTP capacity. Do not scale replicas without shared authentication
+and socket coordination. Queues, public prekeys, enrollment/deny state and count
+credentials persist in SQLite. Preserve the private data directory. Limits,
+operator commands and proxy CIDRs are documented in [HARDENING.md](HARDENING.md).
 
 ## API
 
 | Endpoint | Behavior |
 | --- | --- |
-| `GET /health` | Status, project version, connected users and clients |
+| `GET /health` | Public status, project version and protocol compatibility |
+| `GET /diagnostics` | Authenticated connected-user/client counts |
+| `DELETE /auth/session` / `DELETE /auth/sessions` | Revoke this session / all own sessions and count credentials |
 | `POST /auth/challenge` | Starts proof of possession for a P-256 public key |
 | `POST /auth/verify` | Verifies a one-time signature; enrolls device and issues session |
 | `POST /send` | Accepts `id` (32 lowercase hex), `sender`, `recipient`, `ciphertext`; durably queues and offers live delivery |
-| `GET /messages/<user_id>?after=<cursor>` | Lists up to 500 pending messages with pagination cursors |
+| `GET /messages/<user_id>?after=<cursor>` | Up to 500 messages / about 1 MiB; follow optional `next_cursor` |
 | `GET /messages/<user_id>/count` | Returns only `pending_count` and arrival `revision`; does not download/ack messages |
 | `POST /notifications/token` | Issues/replaces a persistent credential restricted to the owner's count GET |
 | `DELETE /notifications/token` | Revokes that count credential; requires full device authentication |
@@ -109,7 +111,7 @@ The connection's user ID supplies the sender. Replies use `health`, `sent`, or
 User IDs are authenticated and inbox access is restricted to their owner.
 Message retrieval is non-destructive. The server keeps ciphertext until an
 acknowledgement or TTL expiry, and retries are idempotent by message ID.
-Public-key/session storage is currently in memory. Use TLS and deployment-level
+Enrollment/deny records persist; challenges and full sessions remain in memory. Use TLS and deployment-level
 rate limits for remote use.
 See [SECURITY.md](SECURITY.md).
 

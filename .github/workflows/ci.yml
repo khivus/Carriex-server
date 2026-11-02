@@ -21,8 +21,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e ".[dev,server]"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.lock
+      - run: python -m pip install -r requirements.lock -e ".[dev,server]"
+      - run: python -m pip_audit -r requirements.lock --disable-pip --no-deps
       - run: python -m ruff check .
       - run: python -m pytest -q
       - run: python -m build
@@ -44,7 +47,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
-      - run: python -m pip install -e ".[dev,server]"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.lock
+      - run: python -m pip install -r requirements.lock -e ".[dev,server]"
       - name: Verify paired HTTPS and authenticated WebSocket transport
         run: python tests/check_docker_pairing.py

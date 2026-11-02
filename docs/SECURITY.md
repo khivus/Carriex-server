@@ -14,10 +14,11 @@ key through an offline QR/text bundle, with live expiry and hostname checks. Obt
 the initial bundle through a trusted channel; substitution at pairing time can
 substitute the server. Protect and back up the private identity directory. See
 [PAIRING.md](PAIRING.md) for setup and renewal behavior.
-Enrollment is open: ownership of a key does not establish a person's identity or
-administrator approval. There is no revocation/admin flow. Ciphertext queues and
-public X3DH bundles persist in SQLite; bearer sessions and socket registration
-remain process-local. Keep one worker and deploy suitable ingress limits.
+Open enrollment proves key ownership, not a person's identity. Optional approved
+enrollment, local device approval/blocking, session revocation, fair-use quotas,
+bounded sockets and request deadlines are documented in [HARDENING.md](HARDENING.md).
+Ciphertext queues, admission records and public X3DH bundles persist in SQLite;
+bearer sessions and socket registration remain process-local. Use one process.
 
 Optional Android notification checks use persistent, hashed, revocable credentials
 restricted to the owner's pending count. These cannot send, download or acknowledge

@@ -26,6 +26,11 @@ def run(tmp_path, text, *args, success=True, environment=None):
     return result
 
 
+def test_proxy_cidrs_in_shared_config_do_not_break_paired_config_validation(tmp_path):
+    result = run(tmp_path, "CARRIEX_HOST=127.0.0.1\nCARRIEX_PROXY_NETWORKS=127.0.0.1/32\n", "--check-config")
+    assert "https://127.0.0.1:8443" in result.stdout
+
+
 @pytest.mark.parametrize("port", [443, 8443, 18443])
 def test_one_config_port_controls_url_and_listener(tmp_path, port):
     result = run(tmp_path, f"CARRIEX_HOST=192.168.0.34\nCARRIEX_PORT={port}\n", "--check-config")

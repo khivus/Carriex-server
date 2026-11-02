@@ -52,7 +52,10 @@ invitation alert preference and Android notification permission. Tapping opens t
 correct server's shared Requests page. Repeated synchronization does not repeat an alert.
 
 Groups support up to 32 members and pending invitations combined, with up to
-64 groups per identity. Only the permanent admin may rename a group.
+64 currently accepted groups per identity. Pending invitations have a separate
+limit of 16; declined/left/closed history consumes no accepted-group slots.
+Blocked admins cannot invite a device. See [HARDENING.md](HARDENING.md).
+Only the permanent admin may rename a group.
 
 ## Membership authority
 

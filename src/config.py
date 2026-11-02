@@ -31,7 +31,7 @@ def read_config(path):
                         raise ValueError(f"{item.key} needs an =value")
                     values[item.key] = item.value
                 elif item.key and item.key.startswith("CARRIEX_") and item.key not in {
-                    "CARRIEX_TRUST_PROXY", "CARRIEX_AUTH_ORIGIN", "CARRIEX_ALLOW_INSECURE_HTTP",
+                    "CARRIEX_TRUST_PROXY", "CARRIEX_AUTH_ORIGIN", "CARRIEX_ALLOW_INSECURE_HTTP", "CARRIEX_PROXY_NETWORKS",
                 }:
                     raise ValueError(f"Unknown setting {item.key} in {path}")
     # Shell/container settings override file settings. Values are literal, not expanded.
