@@ -39,6 +39,31 @@ def read_config(path):
     return values
 
 
+def validate_runtime_settings(values):
+    """Fail on invalid limits before writing config, identity files or databases."""
+    def number(key, default):
+        try:
+            return int(values.get(key, default))
+        except (TypeError, ValueError):
+            raise ValueError(f"{key} must be a whole number") from None
+    for name, default in DEFAULTS.items():
+        key = "CARRIEX_" + name
+        if number(key, default) <= 0:
+            raise ValueError(f"{key} must be a positive whole number")
+    if values.get("CARRIEX_REGISTRATION_MODE", "open") not in {"open", "approved"}:
+        raise ValueError("CARRIEX_REGISTRATION_MODE must be open or approved")
+    if number("CARRIEX_CONNECTION_LIMIT", 128) < 16:
+        raise ValueError("CARRIEX_CONNECTION_LIMIT must be at least 16")
+    if number("CARRIEX_CONNECTIONS_PER_IP", 32) <= 0:
+        raise ValueError("CARRIEX_CONNECTIONS_PER_IP must be positive")
+    if not 1 <= number("CARRIEX_REQUEST_TIMEOUT", 15) <= 120:
+        raise ValueError("CARRIEX_REQUEST_TIMEOUT must be between 1 and 120 seconds")
+    if number("CARRIEX_MAX_DATABASE_BYTES", 1073741824) < 16 * 1024 * 1024:
+        raise ValueError("CARRIEX_MAX_DATABASE_BYTES must be at least 16777216 (16 MiB)")
+    if number("CARRIEX_MESSAGE_TTL_SECONDS", 2592000) <= 0:
+        raise ValueError("CARRIEX_MESSAGE_TTL_SECONDS must be positive")
+
+
 def port_number(value, label):
     try:
         port = int(value)

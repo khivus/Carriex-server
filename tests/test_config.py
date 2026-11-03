@@ -160,7 +160,7 @@ def test_real_tls_listener_uses_config_port_without_cli_port(tmp_path, requested
     run(tmp_path, f"CARRIEX_HOST=127.0.0.1\nCARRIEX_PORT={port}\nCARRIEX_BIND=127.0.0.1\n", "--pair-only")
     client = TLSClient(port, tmp_path / "identity" / "server-cert.pem")
     with (tmp_path / "server.log").open("w") as log:
-        process = subprocess.Popen([sys.executable, "-m", "src.pairing", "--config", str(tmp_path / "server.env"),
+        process = subprocess.Popen([sys.executable, "-m", "src.bootstrap", "--config", str(tmp_path / "server.env"),
                                     "--data-dir", str(tmp_path / "identity")], cwd=ROOT, stdout=log, stderr=log)
         try:
             deadline = time.monotonic() + 15

@@ -41,3 +41,11 @@ default-Compose check. It builds a uniquely named test project, publishes only o
 loopback, verifies HTTPS and authenticated WSS, edits its temporary `.env`, and
 checks that reconfiguration preserves the key. It removes only its own test
 containers/volume afterward. Normal `pytest` does not require Docker.
+
+`test_config_migration.py` and `test_config_migration_cli.py` cover categorized
+upgrades, exact backups, literal/custom/legacy values, personal comments, BOM/line
+endings, future templates, repeat launches, read-only files and concurrent edits.
+CLI checks also verify that checks/failed limits/missing gevent do not rewrite
+settings or create identity files. `test_bootstrap.py` simulates dependency refresh
+and download failures without changing installed packages. The Docker check also
+exercises the documented explicit host-file migration with a writable test mount.

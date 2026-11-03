@@ -53,6 +53,29 @@ def main():
                                   f"CARRIEX_SERVER_NAME='Docker check {index}'\nPAIRED_BIND=127.0.0.1\n",
                                   encoding="utf-8")
                 compose("up", "--build", "-d", timeout=180)
+                if index == 0:
+                    # Isolated writable bind mount: standard Compose does not mount host .env.
+                    settings = Path(temporary) / "settings"
+                    settings.mkdir(mode=0o777)
+                    settings.chmod(0o777)
+                    env_file = settings / ".env"
+                    original = b"# Personal note\nCARRIEX_HOST=localhost\nCARRIEX_PORT=8443\n"
+                    env_file.write_bytes(original)
+                    env_file.chmod(0o666)
+                    migrate = ("run", "--rm", "--no-deps", "--entrypoint", "python", "--volume",
+                               f"{settings}:/settings", "server", "-m", "src.pairing", "--config",
+                               "/settings/.env", "--migrate-config")
+                    compose(*migrate)
+                    migrated = env_file.read_bytes()
+                    backups = list(settings.glob(".env.backup-*"))
+                    assert len(backups) == 1 and backups[0].read_bytes() == original
+                    assert b"# 08 | INTERNET EXPOSURE" in migrated
+                    assert b"\nCARRIEX_HOST=localhost\n" in migrated
+                    compose(*migrate)
+                    assert env_file.read_bytes() == migrated
+                    assert len(list(settings.glob(".env.backup-*"))) == 1
+                    assert sorted(item.name for item in settings.iterdir()) == sorted([".env", backups[0].name])
+                    print("PASS: Docker host-config migration, exact backup, repeat run, no identity files", flush=True)
                 deadline = time.monotonic() + 30
                 while True:
                     try:

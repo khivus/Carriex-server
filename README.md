@@ -68,6 +68,11 @@ configure the paired server. Use the three `CARRIEX_...` entries above.
 
 All three options use the same `.env`.
 
+**Updating an existing installation:** keep your `.env` and private identity
+folder/volume. Native launchers refresh changed runtime dependencies automatically
+and migrate the settings layout with a backup. Docker needs a rebuilt image.
+See [updating settings and fixing startup](docs/CONFIGURATION.md).
+
 ### Windows: double-click a .bat file
 
 Install Python 3.11 or newer. Open PowerShell in this folder and run once:

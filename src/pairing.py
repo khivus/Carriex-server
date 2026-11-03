@@ -31,9 +31,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 import qrcode
-from dotenv import set_key
-
-from src.config import host_address, port_number, read_config
+from src.config import host_address, port_number, read_config, validate_runtime_settings
+from src.config_migration import migrate_config
 
 
 def canonical_address(value):
@@ -216,16 +215,31 @@ def main(argv=None):
     parser.add_argument("--bind", help="Listening interface, not the pairing address")
     parser.add_argument("--port", type=int, help="Override listening port for router/container port mapping")
     parser.add_argument("--check-config", action="store_true", help="Validate and display settings without changing keys or starting")
-    parser.add_argument("--init-config", action="store_true", help="Add paired settings to .env from the saved address or --address")
+    parser.add_argument("--init-config", action="store_true", help="Create/update categorized .env from the saved address or --address")
+    parser.add_argument("--migrate-config", action="store_true", help="Upgrade .env layout/settings with a backup, without starting")
+    parser.add_argument("--no-migrate-config", action="store_true", help="Use a read-only .env without automatic layout migration")
     parser.add_argument("--pair-only", action="store_true", help="Generate QR/text without starting a listener")
     parser.add_argument("--statistics", action=argparse.BooleanOptionalAction, default=None,
                         help="Save hourly relay statistics (default: disabled; see CARRIEX_STATISTICS)")
     args = parser.parse_args(argv)
     try:
         config = read_config(args.config)
+        validate_runtime_settings(config)
         from src.statistics import enabled_value, retention_days
         statistics = args.statistics if args.statistics is not None else enabled_value(config.get("CARRIEX_STATISTICS", "0"))
         statistics_days = retention_days(config.get("CARRIEX_STATISTICS_RETENTION_DAYS", 30))
+        if args.migrate_config:
+            if config.get("CARRIEX_HOST"):
+                if config.get("CARRIEX_PUBLIC_URL"):
+                    raise ValueError("Use CARRIEX_HOST + CARRIEX_PORT or CARRIEX_PUBLIC_URL, not both")
+                canonical_address(host_address(config["CARRIEX_HOST"], port_number(config.get("CARRIEX_PORT", "8443"), "CARRIEX_PORT")))
+            elif config.get("CARRIEX_PUBLIC_URL"):
+                canonical_address(config["CARRIEX_PUBLIC_URL"])
+            migrated = migrate_config(args.config, create=True)
+            print("Settings template updated." if migrated.changed else "Settings template is current.", flush=True)
+            if migrated.backup:
+                print(f"Previous settings backed up to: {migrated.backup}", flush=True)
+            return
         directory = Path(args.data_dir or config.get("CARRIEX_IDENTITY_DIR") or ".carriex-server").resolve()
         export_directory = pairing_export_directory(
             args.pairing_export_dir if args.pairing_export_dir is not None else config.get("CARRIEX_PAIRING_EXPORT_DIR"),
@@ -266,12 +280,25 @@ def main(argv=None):
         if args.init_config:
             if config.get("CARRIEX_PUBLIC_URL"):
                 raise ValueError("Remove CARRIEX_PUBLIC_URL before migrating to HOST/PORT settings")
-            for key, value in {"CARRIEX_HOST": urlsplit(address).hostname,
-                               "CARRIEX_PORT": str(public_port), "CARRIEX_SERVER_NAME": name}.items():
-                if key not in config:
-                    set_key(args.config, key, value)
+            migrated = migrate_config(args.config, create=True, initial={"CARRIEX_HOST": urlsplit(address).hostname,
+                                       "CARRIEX_PORT": str(public_port), "CARRIEX_SERVER_NAME": name})
+            if migrated.backup:
+                print(f"Previous settings backed up to: {migrated.backup}", flush=True)
             print("Paired settings added to .env. Review it before starting.", flush=True)
             return
+        if not args.pair_only:
+            try:
+                import gevent  # noqa: F401
+            except ImportError:
+                raise ValueError("The updated server needs gevent. Run start-server.bat/start-server.sh to refresh dependencies, "
+                                 "or run this environment's python -m pip install -r requirements.txt") from None
+        if not args.no_migrate_config:
+            try:
+                migrated = migrate_config(args.config)
+                if migrated.changed:
+                    print(f"Settings template updated; original saved as {migrated.backup}", flush=True)
+            except (OSError, ValueError) as error:
+                print(f"Settings layout was not migrated: {error}. Continuing with the validated values.", file=sys.stderr)
         if export_directory is not None:
             export_directory = pairing_export_directory(str(export_directory), directory, create=True)
         bundle, fingerprint = prepare_pairing(directory, address, name, export_directory)

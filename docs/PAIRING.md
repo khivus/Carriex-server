@@ -117,8 +117,8 @@ identity. Restore the backup. An intentionally new identity needs a new empty
 different key at the same address. A failed TLS connection never updates the pin.
 
 Use `--pair-only` to generate/update pairing files without starting the listener.
-Use `--check-config` to validate and print settings without modifying identity
-files. `--config path/to/file.env` selects a different settings file. Precedence is
+Use `--check-config` to validate and print settings without modifying `.env` or identity
+files. It does not download dependencies. `--config path/to/file.env` selects a different settings file. Precedence is
 CLI overrides, shell environment, `.env`, then legacy saved settings. Relative
 identity paths resolve from the working directory; the .bat/.sh launchers change
 to their own folder. No parent directories are searched for .env files. Values
@@ -128,14 +128,21 @@ are literal; variable expansion and shell execution are not supported.
 an explicit `--address`, without changing existing values or creating keys. Legacy
 `CARRIEX_PUBLIC_URL` remains supported as an alternative to HOST/PORT; do not set
 both address forms. Legacy `CARRIEX_TLS_PORT` is a listening-port override.
+Native startup and `--pair-only` upgrade existing `.env` files to the current
+categorized template, saving an exact `.env.backup-*` first. `--migrate-config`
+does this explicitly without starting or creating identity files; it also creates
+a commented template if the file is missing. Use `--no-migrate-config` to opt out.
+Existing values, custom settings and personal notes survive; new options remain
+commented. See [configuration updates and startup recovery](CONFIGURATION.md)
+for dependency updates and Docker's host-file migration boundary.
 Browser warnings when opening the HTTPS API are expected: the private trust is
 inside Carriex. No system/browser certificate installation is needed.
 
 ## Check settings before startup
 
 Run checks from the server repository root. They preview core settings without
-starting a listener or creating identity keys; storage access and message TTL
-are also checked during actual startup. Native launchers accept `--check-config`
+starting a listener or creating identity keys. Runtime limits and TTL are validated;
+storage access is checked during actual startup. Native launchers accept `--check-config`
 as shown above. With Docker, use the same configured `.env`:
 
 ```sh

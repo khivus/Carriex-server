@@ -6,6 +6,15 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+### Startup and configuration
+- Refresh changed locked runtime dependencies from native launchers after a pull;
+  report a missing gevent dependency with a repair command before changing identity.
+- Automatically migrate existing `.env` files to the categorized template with
+  an exact backup, preserved values/comments and commented new options. Add
+  `--migrate-config` and `--no-migrate-config`; keep `--check-config` read-only.
+- Validate security limits before config/identity writes; document update recovery
+  and Docker rebuilds in [configuration updates](docs/CONFIGURATION.md).
+
 ## [0.7.0] - 2026-11-03
 
 ### Compatibility

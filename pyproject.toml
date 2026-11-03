@@ -17,6 +17,9 @@ dev = ["pytest>=8,<10", "websocket-client>=1.8,<2", "build>=1.2,<2", "ruff>=0.11
 [tool.setuptools]
 packages = ["src"]
 
+[tool.setuptools.data-files]
+"share/carriex-server" = [".env.example", "requirements.lock"]
+
 [tool.setuptools.dynamic]
 version = {attr = "src._version.__version__"}
 

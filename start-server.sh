@@ -5,4 +5,4 @@ if [ ! -x .venv/bin/python ]; then
     echo 'Install dependencies first: see README.md (Linux / macOS).'
     exit 1
 fi
-exec .venv/bin/python -m src.pairing "$@"
+exec .venv/bin/python -m src.bootstrap "$@"

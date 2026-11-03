@@ -1,6 +1,7 @@
 **
 !pyproject.toml
 !requirements.lock
+!.env.example
 !README.md
 !src/
 !src/*.py

@@ -124,9 +124,10 @@ python -m build
 ```
 
 See [tests/README.md](../tests/README.md) for integration test details. Dependencies
-are defined in `pyproject.toml`; `requirements.txt` installs the development
-extra. Dependency ranges are not a lockfile: builds may resolve newer compatible
-versions.
+have ranges in `pyproject.toml`; verified runtime versions are pinned in
+`requirements.lock`. `requirements.txt` installs the lock and development/server
+extras. Native launchers refresh a changed runtime lock; config checks do not
+download packages. See [configuration updates](CONFIGURATION.md).
 
 ## Versioning
 

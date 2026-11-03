@@ -1,4 +1,4 @@
-<!-- English source SHA256: d6b11f04061415ba65e79e06f4f390d499ee741adedebd3a0aa03b2b8fbb434e -->
+<!-- English source SHA256: a904fa4c056f90c643a525dd299841788e61881b26b0929616a7cb92bf42f6aa -->
 # Сервер Carriex
 
 [English](DEVELOPMENT.md) | **Русский**
@@ -85,7 +85,11 @@ python -m ruff check .
 python -m build
 ```
 
-Подробности интеграционных тестов: [tests/README.ru.md](../tests/README.ru.md). Зависимости определены в `pyproject.toml`; `requirements.txt` устанавливает extra для разработки. Диапазоны зависимостей не являются lockfile: сборка может выбрать новые совместимые версии.
+Подробности интеграционных тестов: [tests/README.ru.md](../tests/README.ru.md).
+Диапазоны зависимостей определены в `pyproject.toml`; проверенные рабочие версии
+зафиксированы в `requirements.lock`. `requirements.txt` устанавливает lock-файл
+и extra для разработки/сервера. Обычные скрипты обновляют изменившийся рабочий
+lock-файл; проверка настроек ничего не загружает. См. [обновление конфигурации](CONFIGURATION.ru.md).
 
 ## Версии
 
