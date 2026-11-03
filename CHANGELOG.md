@@ -6,6 +6,12 @@ All notable changes are recorded here. Versions follow Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-03
+
+### Compatibility
+- Support Android app 1.12/code 13. App codes 10-13 keep the existing protocol 3;
+  update the server before installing app 1.12 because older relays cap app codes at 12.
+
 ### Security and delivery fixes
 - Remove the 64-pending-message cap for accepted contacts while retaining request,
   recipient and fair sender storage limits; add precise expiry and byte pagination.
