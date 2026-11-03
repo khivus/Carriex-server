@@ -4,6 +4,7 @@ Uses a uniquely named Compose project, temporary config and loopback ports only.
 Its own test containers/volume are removed on exit; existing deployments are untouched.
 """
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -68,7 +69,18 @@ def main():
                     compose(*migrate)
                     migrated = env_file.read_bytes()
                     backups = list(settings.glob(".env.backup-*"))
-                    assert len(backups) == 1 and backups[0].read_bytes() == original
+                    assert len(backups) == 1
+                    # Backups are 0600 and owned by the container user. A Linux host
+                    # runner may have a different UID; verify as the writer instead
+                    # of relaxing the backup's permissions for the test.
+                    backup_digest = compose(
+                        "run", "--rm", "--no-deps", "--entrypoint", "python", "--volume",
+                        f"{settings}:/settings", "server", "-c",
+                        "import hashlib,pathlib,sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())",
+                        f"/settings/{backups[0].name}").strip()
+                    assert backup_digest == hashlib.sha256(original).hexdigest()
+                    if os.name != "nt":
+                        assert backups[0].stat().st_mode & 0o777 == 0o600
                     assert b"# 08 | INTERNET EXPOSURE" in migrated
                     assert b"\nCARRIEX_HOST=localhost\n" in migrated
                     compose(*migrate)
